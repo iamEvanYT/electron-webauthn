@@ -1,0 +1,14 @@
+{
+  "name": "electron-webauthn",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "objc-js": "^0.0.7"
+  }
+}
