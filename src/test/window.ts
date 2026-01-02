@@ -1,6 +1,6 @@
 import { NobjcLibrary, NobjcProtocol, type NobjcObject } from "objc-js";
-import { allocInitPlain } from "./objc/helpers.js";
-import { NSStringFromString } from "./objc/foundation/nsstring.js";
+import { allocInitPlain } from "../objc/helpers.js";
+import { NSStringFromString } from "../objc/foundation/nsstring.js";
 
 const AppKit = new NobjcLibrary(
   "/System/Library/Frameworks/AppKit.framework/AppKit"
@@ -10,8 +10,8 @@ const Foundation = new NobjcLibrary(
 );
 
 function createEmptyWindow(): NobjcObject {
-  const NSApp = AppKit.NSApplication.sharedApplication();
-  const window = allocInitPlain(AppKit.NSWindow);
+  const NSApp = AppKit.NSApplication!.sharedApplication()!;
+  const window = allocInitPlain(AppKit.NSWindow!);
   const styleMask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3); // titled, closable, miniaturizable, resizable
 
   // Make the app active and show the window.
@@ -51,9 +51,9 @@ function createEmptyWindow(): NobjcObject {
   process.once("SIGQUIT", handleSignal);
 
   // Pump the AppKit run loop for a short tick to keep JS responsive.
-  const runLoop = Foundation.NSRunLoop.currentRunLoop();
+  const runLoop = Foundation.NSRunLoop!.currentRunLoop()!;
   const pump = () => {
-    const untilDate = Foundation.NSDate.dateWithTimeIntervalSinceNow$(0.01);
+    const untilDate = Foundation.NSDate!.dateWithTimeIntervalSinceNow$(0.01)!;
     runLoop.runUntilDate$(untilDate);
   };
   const pumpId = setInterval(pump, 10);

@@ -1,6 +1,6 @@
-import { NSData } from "./objc/foundation/nsdata.js";
-import { NSString } from "./objc/foundation/nsstring.js";
-import { NSArray } from "./objc/foundation/nsarray.js";
+import { NSData } from "../objc/foundation/nsdata.js";
+import { NSString } from "../objc/foundation/nsstring.js";
+import { NSArray } from "../objc/foundation/nsarray.js";
 
 const myString = NSString.stringWithUTF8String$("Hello from Objective-C!");
 console.log("Created NSString:", myString);

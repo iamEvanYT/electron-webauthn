@@ -6,13 +6,8 @@ import { createPlatformPublicKeyCredentialProvider } from "./objc/authentication
 import { NSArray } from "./objc/foundation/nsarray.js";
 import { NSDataFromBuffer } from "./objc/foundation/nsdata.js";
 import { NSStringFromString } from "./objc/foundation/nsstring.js";
-import { _NSError } from "./objc/foundation/nserror.js";
-import { createEmptyWindow, getNativeWindowHandle } from "./window.js";
+import type { _NSError } from "./objc/foundation/nserror.js";
 import type { _NSView } from "./objc/foundation/nsview.js";
-
-const window = createEmptyWindow();
-const nsView = getNativeWindowHandle(window);
-const nsViewPointer = getPointer(nsView);
 
 function getCredential(
   rpid: string,
@@ -57,7 +52,7 @@ function getCredential(
   const presentationContextProvider = createPresentationContextProvider({
     presentationAnchorForAuthorizationController: (controller) => {
       // Return the NSWindow to present the authorization UI in
-      const nsView = fromPointer(nsViewPointer) as unknown as _NSView;
+      const nsView = fromPointer(nativeWindowHandle) as unknown as _NSView;
       const nsWindow = nsView.window();
       return nsWindow;
     },
@@ -70,9 +65,4 @@ function getCredential(
   return authController;
 }
 
-const result = getCredential(
-  "example.com",
-  Buffer.from("challenge"),
-  nsViewPointer
-);
-console.log("Result:", result);
+export { getCredential };
