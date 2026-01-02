@@ -51,9 +51,12 @@ function getCredential(
   // authController.presentationContextProvider = self
   const presentationContextProvider = createPresentationContextProvider({
     presentationAnchorForAuthorizationController: (controller) => {
+      // return NSStringFromString("Hello, world!");
       // Return the NSWindow to present the authorization UI in
       const nsView = fromPointer(nativeWindowHandle) as unknown as _NSView;
+      console.log("nsView", nsView);
       const nsWindow = nsView.window();
+      console.log("nsWindow", nsWindow);
       return nsWindow;
     },
   });

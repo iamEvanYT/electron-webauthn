@@ -5,7 +5,7 @@
     "": {
       "name": "electron-webauthn-test",
       "dependencies": {
-        "objc-js": "^0.0.11",
+        "objc-js": "^0.0.12",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -27,7 +27,7 @@
 
     "node-addon-api": ["node-addon-api@8.5.0", "", {}, "sha512-/bRZty2mXUIFY/xU5HLvveNHlswNJej+RnxBjOMkidWfwZzgTbPG1E3K5TOxRLOR+5hX7bSofy8yf1hZevMS8A=="],
 
-    "objc-js": ["objc-js@0.0.11", "", { "dependencies": { "node-addon-api": "^8.5.0" }, "os": "darwin" }, "sha512-Q22psuGWjQgVw1ixhoZvQ6uOoq/4m4AQzQU/CQpQpT6WuoF6WWx7+ZeTutH3Be2rt5jBBkhP5iz2uCPupUapSg=="],
+    "objc-js": ["objc-js@0.0.12", "", { "dependencies": { "node-addon-api": "^8.5.0" }, "os": "darwin" }, "sha512-Fq5jI5+F1hAIUgYDDHT9I8zoS/28vgbdU3O3WEbRX7cYYZK1AV8WfXQ57VgHVolcu+zurLJZ7HtFFfylqMo/Pw=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

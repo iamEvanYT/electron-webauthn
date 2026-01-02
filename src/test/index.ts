@@ -11,4 +11,4 @@ const result = getCredential(
   Buffer.from("challenge"),
   nsViewPointer
 );
-console.log(result);
+console.log("Result:", result);
