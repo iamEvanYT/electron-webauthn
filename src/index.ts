@@ -1,4 +1,4 @@
-import { getPointer } from "objc-js";
+import { fromPointer, getPointer } from "objc-js";
 import { createAuthorizationControllerDelegate } from "./objc/authentication-services/as-authorization-controller-delegate.js";
 import { createAuthorizationController } from "./objc/authentication-services/as-authorization-controller.js";
 import { createPresentationContextProvider } from "./objc/authentication-services/as-authorization-controller-presentation-context-providing.js";
@@ -8,6 +8,7 @@ import { NSDataFromBuffer } from "./objc/foundation/nsdata.js";
 import { NSStringFromString } from "./objc/foundation/nsstring.js";
 import { _NSError } from "./objc/foundation/nserror.js";
 import { createEmptyWindow, getNativeWindowHandle } from "./window.js";
+import type { _NSView } from "./objc/foundation/nsview.js";
 
 const window = createEmptyWindow();
 const nsView = getNativeWindowHandle(window);
@@ -56,8 +57,9 @@ function getCredential(
   const presentationContextProvider = createPresentationContextProvider({
     presentationAnchorForAuthorizationController: (controller) => {
       // Return the NSWindow to present the authorization UI in
-      console.log("presentationAnchorForAuthorizationController", window);
-      return window;
+      const nsView = fromPointer(nsViewPointer) as unknown as _NSView;
+      const nsWindow = nsView.window();
+      return nsWindow;
     },
   });
   authController.setPresentationContextProvider$(presentationContextProvider);

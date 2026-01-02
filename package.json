@@ -9,6 +9,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "objc-js": "^0.0.7"
+    "objc-js": "^0.0.8"
   }
 }
