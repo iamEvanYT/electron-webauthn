@@ -9,6 +9,7 @@ const nsViewPointer = getPointer(nsView);
 const result = getCredential(
   "example.com",
   Buffer.from("challenge"),
-  nsViewPointer
+  nsViewPointer,
+  []
 );
 console.log("Result:", result);

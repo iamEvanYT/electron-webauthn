@@ -1,4 +1,5 @@
 import { NobjcObject, NobjcProtocol } from "objc-js";
+import type { _ASAuthorization } from "./as-authorization.js";
 
 /**
  * ASAuthorizationControllerDelegate Protocol
@@ -19,7 +20,7 @@ export interface ASAuthorizationControllerDelegateCallbacks {
    */
   didCompleteWithAuthorization?: (
     controller: NobjcObject,
-    authorization: NobjcObject
+    authorization: _ASAuthorization
   ) => void;
 
   /**
