@@ -27,6 +27,8 @@ export interface GetCredentialResult {
   authenticatorData: Buffer;
   signature: Buffer;
   userHandle: Buffer;
+  prf: [Buffer, Buffer];
+  largeBlob: Buffer;
 }
 
 function getCredential(
@@ -86,6 +88,10 @@ function getCredential(
         authenticatorAttachment = "cross-platform";
       }
 
+      const prf = credential.prf();
+      const prfFirst = prf.first();
+      const prfSecond = prf.second();
+
       resolve({
         id,
         authenticatorAttachment,
@@ -95,6 +101,11 @@ function getCredential(
         ),
         signature: bufferFromNSDataDirect(credential.signature()),
         userHandle: bufferFromNSDataDirect(credential.userID()),
+        prf: [
+          bufferFromNSDataDirect(prfFirst),
+          bufferFromNSDataDirect(prfSecond),
+        ],
+        largeBlob: bufferFromNSDataDirect(credential.largeBlob().readData()),
       });
     },
     didCompleteWithError: (_, error) => {
