@@ -6,7 +6,7 @@ import { createPlatformPublicKeyCredentialProvider } from "./objc/authentication
 import { createPlatformPublicKeyCredentialDescriptor } from "./objc/authentication-services/as-authorization-platform-public-key-credential-descriptor.js";
 import type { _ASAuthorization } from "./objc/authentication-services/as-authorization.js";
 import type { _ASAuthorizationPlatformPublicKeyCredentialAssertion } from "./objc/authentication-services/as-authorization-platform-public-key-credential-assertion.js";
-import { NSArray, NSArrayFromObjects } from "./objc/foundation/nsarray.js";
+import { NSArrayFromObjects } from "./objc/foundation/nsarray.js";
 import {
   type _NSData,
   bufferFromNSDataDirect,
@@ -27,6 +27,8 @@ import {
   setClientDataHash,
   WebauthnGetController,
 } from "./get-authorization-controller.js";
+import { createSecurityKeyPublicKeyCredentialProvider } from "./objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
+import type { _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion } from "./objc/authentication-services/as-authorization-platform-security-key-credential-assertion.js";
 
 type AuthenticatorAttachment = "platform" | "cross-platform";
 export type UserVerificationPreference =
@@ -86,8 +88,36 @@ function getCredential(
     );
   }
 
+  // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
+  const securityKeyProvider =
+    createSecurityKeyPublicKeyCredentialProvider(NS_rpID);
+
+  // let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
+  const securityKeyRequest =
+    securityKeyProvider.createCredentialAssertionRequestWithChallenge$(
+      NS_challenge
+    );
+
+  // securityKeyRequest.userVerificationPreference = ???
+  if (userVerificationPreference === "preferred") {
+    securityKeyRequest.setUserVerificationPreference$(
+      NSStringFromString("preferred")
+    );
+  } else if (userVerificationPreference === "required") {
+    securityKeyRequest.setUserVerificationPreference$(
+      NSStringFromString("required")
+    );
+  } else if (userVerificationPreference === "discouraged") {
+    securityKeyRequest.setUserVerificationPreference$(
+      NSStringFromString("discouraged")
+    );
+  }
+
   // let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
-  const requestsArray = NSArray.arrayWithObject$(platformKeyRequest);
+  const requestsArray = NSArrayFromObjects([
+    platformKeyRequest,
+    securityKeyRequest,
+  ]);
   const authController: typeof ASAuthorizationController.prototype =
     WebauthnGetController.alloc().initWithAuthorizationRequests$(requestsArray);
   // OLD: const authController = createAuthorizationController(requestsArray);
@@ -126,8 +156,9 @@ function getCredential(
   const delegate = createAuthorizationControllerDelegate({
     didCompleteWithAuthorization: (_, authorization) => {
       // Cast to _ASAuthorization to access typed methods
-      const credential =
-        authorization.credential() as unknown as _ASAuthorizationPlatformPublicKeyCredentialAssertion;
+      const credential = authorization.credential() as unknown as
+        | _ASAuthorizationPlatformPublicKeyCredentialAssertion
+        | _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
       // console.log("Authorization succeeded:", credential);
 
       const id_data = credential.credentialID();

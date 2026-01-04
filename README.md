@@ -222,13 +222,13 @@ try {
 **Supported:**
 
 - ✅ WebAuthn assertions (authentication with existing credentials)
+- ✅ Cross-platform authenticators (external security keys)
 - ✅ Platform authenticators (Touch ID, Face ID)
 - ✅ PRF (Pseudo-Random Function) output
 - ✅ Large Blob support
 
 **Not Supported:**
 
-- ❌ Cross-platform authenticators (external security keys)
 - ❌ Credential registration (attestation)
 - ❌ Discoverable credentials
 
