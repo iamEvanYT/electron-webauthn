@@ -15,6 +15,9 @@ This package provides JavaScript bindings to Apple's AuthenticationServices fram
 - 🔑 Support for cross-platform authenticators (external security keys)
 - 📦 TypeScript first with complete type definitions
 - 🎨 Seamless integration with Electron's native window system
+- 🔐 PRF (Pseudo-Random Function) support for credential assertions
+- 💾 Large Blob support for storing credential-specific data
+- ⚙️ User verification preference configuration (preferred, required, discouraged)
 
 ## Installation
 
@@ -49,8 +52,9 @@ async function authenticate() {
   const result = await getCredential(
     "example.com", // Relying Party ID
     Buffer.from("your-challenge"), // Challenge from server
-    nativeWindowHandle, // Native window for UI presentation
-    [] // Optional: allowed credential IDs
+    "https://example.com", // Origin
+    [], // Optional: allowed credential IDs
+    "preferred" // Optional: user verification preference
   );
 
   console.log(result);
@@ -61,12 +65,14 @@ async function authenticate() {
   // - authenticatorData: Authenticator data (Buffer)
   // - signature: Assertion signature (Buffer)
   // - userHandle: User handle (Buffer)
+  // - prf: [Buffer | null, Buffer | null] - PRF output (if supported)
+  // - largeBlob: Buffer | null - Large blob data (if supported)
 }
 ```
 
 ## API Reference
 
-### `getCredential(rpid, challenge, nativeWindowHandle, allowedCredentialIds)`
+### `getCredential(rpid, challenge, origin, allowedCredentialIds, userVerificationPreference)`
 
 Performs a WebAuthn assertion (authentication) using available platform and cross-platform authenticators.
 
@@ -74,8 +80,12 @@ Performs a WebAuthn assertion (authentication) using available platform and cros
 
 - **`rpid: string`** - The Relying Party ID (typically your domain)
 - **`challenge: Buffer`** - The challenge from your server (32+ bytes recommended)
-- **`nativeWindowHandle: Buffer`** - The native window handle from Electron
+- **`origin: string`** - The origin where the credential assertion will be used (e.g., "https://example.com")
 - **`allowedCredentialIds: Buffer[]`** - Optional array of credential IDs the user can use (empty = all registered credentials)
+- **`userVerificationPreference?: UserVerificationPreference`** - Optional preference for user verification. Can be:
+  - `"preferred"` - User verification is preferred but not required (default)
+  - `"required"` - User verification is required
+  - `"discouraged"` - User verification should be discouraged
 
 #### Returns
 
@@ -91,49 +101,20 @@ interface GetCredentialResult {
   authenticatorData: Buffer; // Authenticator data from the device
   signature: Buffer; // Digital signature from the authenticator
   userHandle: Buffer; // User handle from the credential
+  prf: [Buffer | null, Buffer | null]; // PRF output (if supported by authenticator)
+  largeBlob: Buffer | null; // Large blob data (if supported by authenticator)
 }
+```
+
+#### User Verification Preference Type
+
+```typescript
+type UserVerificationPreference = "preferred" | "required" | "discouraged";
 ```
 
 ## Architecture
 
-### Package Structure
-
-```
-src/
-├── index.ts                           # Main export - getCredential function
-├── helpers.ts                         # Utility functions
-├── objc/
-│   ├── authentication-services/       # AuthenticationServices framework bindings
-│   │   ├── as-authorization-*.ts      # Authorization request/response objects
-│   │   ├── enums/                     # Enumeration values
-│   │   └── index.ts                   # Exports
-│   └── foundation/                    # Foundation framework bindings
-│       ├── nsdata.ts                  # NSData (binary data) bindings
-│       ├── nsstring.ts                # NSString bindings
-│       ├── nsarray.ts                 # NSArray bindings
-│       ├── nserror.ts                 # NSError bindings
-│       ├── nsview.ts                  # NSView bindings
-│       ├── nswindow.ts                # NSWindow bindings
-│       └── index.ts                   # Exports
-└── test/                              # Test utilities
-    ├── index.ts                       # Test script
-    ├── window.ts                      # Test window helpers
-    └── example.ts                     # Example usage
-```
-
-### Dependencies
-
-- **objc-js** - Native Objective-C bindings for JavaScript
-- **TypeScript** - For type checking and compilation
-
-## How It Works
-
-1. **Request Creation**: The library creates a `ASAuthorizationPlatformPublicKeyCredentialProvider` with your RP ID
-2. **Request Configuration**: Sets up the challenge and optional allowed credentials list
-3. **Controller Setup**: Creates an `ASAuthorizationController` to manage the authentication flow
-4. **Delegation**: Registers delegates to handle success/error responses from the system
-5. **Presentation**: Shows the native authentication UI in your window
-6. **Result Processing**: Converts Objective-C objects to JavaScript Buffers and returns the assertion data
+This library implements the WebAuthn standard using native APIs. Under the hood it handles all the complexity of macOS's authentication system, so you just call `getCredential()` with your challenge and get back the signed assertion.
 
 ## Usage Examples
 
@@ -155,7 +136,7 @@ app.on("ready", () => {
 // In your preload script or main process
 export async function authenticateUser(challenge: Buffer) {
   const nativeHandle = getPointer(mainWindow.getNativeWindowHandle());
-  return getCredential("myapp.com", challenge, nativeHandle, []);
+  return getCredential("myapp.com", challenge, "https://myapp.com", []);
 }
 ```
 
@@ -166,9 +147,41 @@ export async function authenticateUser(challenge: Buffer) {
 const result = await getCredential(
   "myapp.com",
   challenge,
-  nativeWindowHandle,
+  "https://myapp.com",
   [credentialId1, credentialId2] // User can only use these credentials
 );
+```
+
+### With User Verification Requirement
+
+```typescript
+// Require user verification (e.g., for sensitive operations)
+const result = await getCredential(
+  "myapp.com",
+  challenge,
+  "https://myapp.com",
+  [], // No credential restrictions
+  "required" // Require user verification (biometric or PIN)
+);
+```
+
+### Using PRF Output
+
+```typescript
+// Get credential with PRF support
+const result = await getCredential(
+  "myapp.com",
+  challenge,
+  "https://myapp.com",
+  []
+);
+
+// PRF output is available in the result
+const [prfFirst, prfSecond] = result.prf;
+if (prfFirst) {
+  // Use PRF output for additional cryptographic operations
+  console.log("PRF first output:", prfFirst);
+}
 ```
 
 ### Server-Side Verification
@@ -197,7 +210,7 @@ try {
   const result = await getCredential(
     "example.com",
     challenge,
-    nativeWindowHandle,
+    "https://example.com",
     []
   );
 } catch (error) {
@@ -206,51 +219,25 @@ try {
 }
 ```
 
-## Platform Support
+**Supported:**
 
-| Platform  | Support          |
-| --------- | ---------------- |
-| macOS 12+ | ✅ Full support  |
-| Windows   | ❌ Not supported |
-| Linux     | ❌ Not supported |
-| iOS       | ❌ Not supported |
+- ✅ WebAuthn assertions (authentication with existing credentials)
+- ✅ Platform authenticators (Touch ID, Face ID)
+- ✅ PRF (Pseudo-Random Function) output
+- ✅ Large Blob support
 
-## WebAuthn Spec Compliance
+**Not Supported:**
 
-This library implements the WebAuthn Level 2 specification for the assertion (authentication) operation:
-
-- ✅ Public Key Credential (assertions)
-- ✅ Platform authenticators (built-in)
-- ✅ Cross-platform authenticators (external)
-- ❌ Credential registration (create)
-- ℹ️ See [WebAuthn Specification](https://www.w3.org/TR/webauthn-2/)
-
-## Development
-
-### Building
-
-```bash
-bun run build
-```
-
-This compiles TypeScript to JavaScript in the `dist/` directory.
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-
-1. Code is properly typed with TypeScript
-2. New features include appropriate documentation
-3. Tests pass with `bun run test`
-4. Code builds successfully with `bun run build`
+- ❌ Cross-platform authenticators (external security keys)
+- ❌ Credential registration (attestation)
+- ❌ Discoverable credentials
 
 ## License
 
 See [LICENSE](./LICENSE) file for details.
 
-## Related Resources
+## Resources
 
 - [WebAuthn Specification](https://www.w3.org/TR/webauthn-2/)
-- [Apple AuthenticationServices Documentation](https://developer.apple.com/documentation/authenticationservices)
 - [Electron Documentation](https://www.electronjs.org/docs)
 - [objc-js Library](https://github.com/iamEvanYT/objc-js)

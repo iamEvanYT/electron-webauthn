@@ -92,7 +92,8 @@ function getCredential(
     WebauthnGetController.alloc().initWithAuthorizationRequests$(requestsArray);
   // OLD: const authController = createAuthorizationController(requestsArray);
 
-  // Generate the client data
+  // Generate our own client data instead of letting apple generate it
+  //  This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
   const serializedOrigin = serializeOrigin(origin);
   const clientData = {
     type: "webauthn.get",
@@ -104,7 +105,6 @@ function getCredential(
   const clientDataJSON = JSON.stringify(clientData);
   const clientDataBuffer = Buffer.from(clientDataJSON, "utf-8");
   const clientDataHash = clientDataJsonBufferToHash(clientDataBuffer);
-  console.log("clientDataJSON", clientDataJSON);
 
   setClientDataHash(authController, clientDataHash);
 
@@ -128,7 +128,7 @@ function getCredential(
       // Cast to _ASAuthorization to access typed methods
       const credential =
         authorization.credential() as unknown as _ASAuthorizationPlatformPublicKeyCredentialAssertion;
-      console.log("Authorization succeeded:", credential);
+      // console.log("Authorization succeeded:", credential);
 
       const id_data = credential.credentialID();
       const id = bufferFromNSDataDirect(id_data);
@@ -144,8 +144,6 @@ function getCredential(
       const prf = credential.prf();
       const prfFirst = prf?.first ? prf.first() : null;
       const prfSecond = prf?.second ? prf.second() : null;
-
-      console.log("rawAuthenticatorData", credential.rawAuthenticatorData());
 
       resolve({
         id,
@@ -171,7 +169,8 @@ function getCredential(
       // Parse the NSError into a readable format
       const parsedError = error as unknown as typeof _NSError.prototype;
       const errorMessage = parsedError.localizedDescription().UTF8String();
-      console.error("Authorization failed:", errorMessage);
+      // console.error("Authorization failed:", errorMessage);
+
       reject(new Error(errorMessage));
 
       finished(false);
@@ -191,7 +190,6 @@ function getCredential(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
-  console.log("performing requests");
   authController.performRequests();
 
   return promise;
