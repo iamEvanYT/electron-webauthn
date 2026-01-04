@@ -20,9 +20,12 @@ export const NSArray = Foundation.NSArray as unknown as typeof _NSArray;
  * @returns An NSArray object
  */
 export function NSArrayFromObjects(objects: NobjcObject[]): _NSArray {
-  let array = NSArray.array();
-  for (const obj of objects) {
-    array = array.arrayByAddingObject$(obj);
+  if (objects.length === 0) {
+    return NSArray.array();
+  }
+  let array = NSArray.arrayWithObject$(objects[0]);
+  for (let i = 1; i < objects.length; i++) {
+    array = array.arrayByAddingObject$(objects[i]);
   }
   return array;
 }
