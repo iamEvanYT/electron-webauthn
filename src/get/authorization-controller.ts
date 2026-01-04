@@ -1,5 +1,5 @@
 import { NobjcClass, NobjcObject, getPointer } from "objc-js";
-import { NSDataFromBuffer, type _NSData } from "./objc/foundation/nsdata.js";
+import { NSDataFromBuffer, type _NSData } from "../objc/foundation/nsdata.js";
 
 const getControllerState = new Map<string, Buffer>();
 
