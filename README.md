@@ -1,5 +1,8 @@
 # electron-webauthn
 
+> [!WARNING]
+> This package is currently a proof of concept (v0) and is not functional. A fully working v1 release will replace this very shortly. Stay tuned.
+
 A high-performance, cross-platform WebAuthn/Passkey implementation for Electron applications, built with Rust and native platform APIs.
 
 ## Overview
