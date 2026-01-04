@@ -1,6 +1,6 @@
 import { fromPointer } from "objc-js";
 import { createAuthorizationControllerDelegate } from "./objc/authentication-services/as-authorization-controller-delegate.js";
-import { createAuthorizationController } from "./objc/authentication-services/as-authorization-controller.js";
+import { ASAuthorizationController } from "./objc/authentication-services/as-authorization-controller.js";
 import { createPresentationContextProvider } from "./objc/authentication-services/as-authorization-controller-presentation-context-providing.js";
 import { createPlatformPublicKeyCredentialProvider } from "./objc/authentication-services/as-authorization-platform-public-key-credential-provider.js";
 import { createPlatformPublicKeyCredentialDescriptor } from "./objc/authentication-services/as-authorization-platform-public-key-credential-descriptor.js";
@@ -15,10 +15,24 @@ import {
 import { NSStringFromString } from "./objc/foundation/nsstring.js";
 import type { _NSError } from "./objc/foundation/nserror.js";
 import type { _NSView } from "./objc/foundation/nsview.js";
-import { PromiseWithResolvers } from "./helpers.js";
+import {
+  bufferToBase64Url,
+  clientDataJsonBufferToHash,
+  PromiseWithResolvers,
+  serializeOrigin,
+} from "./helpers.js";
 import { ASAuthorizationPublicKeyCredentialAttachment } from "./objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
+import {
+  removeClientDataHash,
+  setClientDataHash,
+  WebauthnGetController,
+} from "./get-authorization-controller.js";
 
 type AuthenticatorAttachment = "platform" | "cross-platform";
+export type UserVerificationPreference =
+  | "preferred"
+  | "required"
+  | "discouraged";
 
 export interface GetCredentialResult {
   id: Buffer;
@@ -27,15 +41,17 @@ export interface GetCredentialResult {
   authenticatorData: Buffer;
   signature: Buffer;
   userHandle: Buffer;
-  prf: [Buffer, Buffer];
-  largeBlob: Buffer;
+  prf: [Buffer | null, Buffer | null];
+  largeBlob: Buffer | null;
 }
 
 function getCredential(
   rpid: string,
   challenge: Buffer,
   nativeWindowHandle: Buffer,
-  allowedCredentialIds: Buffer[]
+  origin: string,
+  allowedCredentialIds: Buffer[],
+  userVerificationPreference?: UserVerificationPreference
 ): Promise<GetCredentialResult> {
   const { promise, resolve, reject } =
     PromiseWithResolvers<GetCredentialResult>();
@@ -55,9 +71,46 @@ function getCredential(
       NS_challenge
     );
 
+  // platformKeyRequest.userVerificationPreference = ???
+  if (userVerificationPreference === "preferred") {
+    platformKeyRequest.setUserVerificationPreference$(
+      NSStringFromString("preferred")
+    );
+  } else if (userVerificationPreference === "required") {
+    platformKeyRequest.setUserVerificationPreference$(
+      NSStringFromString("required")
+    );
+  } else if (userVerificationPreference === "discouraged") {
+    platformKeyRequest.setUserVerificationPreference$(
+      NSStringFromString("discouraged")
+    );
+  }
+
   // let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
   const requestsArray = NSArray.arrayWithObject$(platformKeyRequest);
-  const authController = createAuthorizationController(requestsArray);
+  const authController: typeof ASAuthorizationController.prototype =
+    WebauthnGetController.alloc().initWithAuthorizationRequests$(requestsArray);
+  // OLD: const authController = createAuthorizationController(requestsArray);
+
+  // Generate the client data
+  const serializedOrigin = serializeOrigin(origin);
+  const clientData = {
+    type: "webauthn.get",
+    challenge: bufferToBase64Url(challenge),
+    origin: serializedOrigin,
+    crossOrigin: false,
+  };
+
+  const clientDataJSON = JSON.stringify(clientData);
+  const clientDataBuffer = Buffer.from(clientDataJSON, "utf-8");
+  const clientDataHash = clientDataJsonBufferToHash(clientDataBuffer);
+  console.log("clientDataJSON", clientDataJSON);
+
+  setClientDataHash(authController, clientDataHash);
+
+  const finished = (_success: boolean) => {
+    removeClientDataHash(authController);
+  };
 
   // Set allowed credentials if provided
   if (allowedCredentialIds.length > 0) {
@@ -89,24 +142,30 @@ function getCredential(
       }
 
       const prf = credential.prf();
-      const prfFirst = prf.first();
-      const prfSecond = prf.second();
+      const prfFirst = prf?.first ? prf.first() : null;
+      const prfSecond = prf?.second ? prf.second() : null;
+
+      console.log("rawAuthenticatorData", credential.rawAuthenticatorData());
 
       resolve({
         id,
         authenticatorAttachment,
-        clientDataJSON: bufferFromNSDataDirect(credential.rawClientDataJSON()),
+        clientDataJSON: clientDataBuffer, //bufferFromNSDataDirect(credential.rawClientDataJSON()),
         authenticatorData: bufferFromNSDataDirect(
           credential.rawAuthenticatorData()
         ),
         signature: bufferFromNSDataDirect(credential.signature()),
         userHandle: bufferFromNSDataDirect(credential.userID()),
         prf: [
-          bufferFromNSDataDirect(prfFirst),
-          bufferFromNSDataDirect(prfSecond),
+          prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
+          prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
         ],
-        largeBlob: bufferFromNSDataDirect(credential.largeBlob().readData()),
+        largeBlob: credential.largeBlob()
+          ? bufferFromNSDataDirect(credential.largeBlob().readData())
+          : null,
       });
+
+      finished(true);
     },
     didCompleteWithError: (_, error) => {
       // Parse the NSError into a readable format
@@ -114,6 +173,8 @@ function getCredential(
       const errorMessage = parsedError.localizedDescription().UTF8String();
       console.error("Authorization failed:", errorMessage);
       reject(new Error(errorMessage));
+
+      finished(false);
     },
   });
   authController.setDelegate$(delegate);
@@ -130,6 +191,7 @@ function getCredential(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
+  console.log("performing requests");
   authController.performRequests();
 
   return promise;

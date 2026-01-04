@@ -1,6 +1,6 @@
 {
   "name": "electron-webauthn",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "repository": "https://github.com/iamEvanYT/electron-webauthn",
   "description": "Add support for WebAuthn for Electron.",
   "main": "dist/index.js",
@@ -28,7 +28,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "objc-js": "^0.0.13"
+    "objc-js": "^0.0.14"
   },
   "trustedDependencies": [
     "objc-js"
