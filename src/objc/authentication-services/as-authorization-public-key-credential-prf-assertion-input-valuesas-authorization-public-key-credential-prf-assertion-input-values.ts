@@ -32,7 +32,5 @@ export function createASAuthorizationPublicKeyCredentialPRFAssertionInputValues(
   const instance = (
     ASAuthorizationPublicKeyCredentialPRFAssertionInputValues as any
   ).alloc();
-  console.log("saltInput1", saltInput1);
-  console.log("saltInput2", saltInput2);
   return instance.initWithSaltInput1$saltInput2$(saltInput1, saltInput2);
 }

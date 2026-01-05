@@ -1,4 +1,4 @@
-import { fromPointer } from "objc-js";
+import { fromPointer, type NobjcObject } from "objc-js";
 import { createAuthorizationControllerDelegate } from "../objc/authentication-services/as-authorization-controller-delegate.js";
 import { ASAuthorizationController } from "../objc/authentication-services/as-authorization-controller.js";
 import { createPresentationContextProvider } from "../objc/authentication-services/as-authorization-controller-presentation-context-providing.js";
@@ -69,83 +69,61 @@ export interface GetCredentialAdditionalOptions {
   prfByCredential?: Record<string, PRFInput>;
 }
 
-function getCredential(
-  rpid: string,
-  challenge: Buffer,
-  nativeWindowHandle: Buffer,
-  origin: string,
-  enabledExtensions: CredentialAssertionExtensions[] = [],
+function setupPublicKeyCredentialRequest(
+  type: "platform" | "security-key",
+  keyRequest: NobjcObject,
+  userVerificationPreference: UserVerificationPreference,
+  enabledExtensions: CredentialAssertionExtensions[],
   allowedCredentialIds: Buffer[],
-  userVerificationPreference?: UserVerificationPreference,
-  additionalOptions: GetCredentialAdditionalOptions = {}
-): Promise<GetCredentialResult> {
-  const { promise, resolve, reject } =
-    PromiseWithResolvers<GetCredentialResult>();
-
-  // Create NS objects
-  const NS_rpID = NSStringFromString(rpid);
-
-  // let challenge: Data // Obtain this from the server.
-  const NS_challenge = NSDataFromBuffer(challenge);
-
-  // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
-  const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
-
-  // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
-  const platformKeyRequest =
-    platformProvider.createCredentialAssertionRequestWithChallenge$(
-      NS_challenge
-    );
-
-  // platformKeyRequest.userVerificationPreference = ???
+  additionalOptions: GetCredentialAdditionalOptions
+) {
+  // keyRequest.userVerificationPreference = ???
   if (userVerificationPreference === "preferred") {
-    platformKeyRequest.setUserVerificationPreference$(
-      NSStringFromString("preferred")
-    );
+    keyRequest.setUserVerificationPreference$(NSStringFromString("preferred"));
   } else if (userVerificationPreference === "required") {
-    platformKeyRequest.setUserVerificationPreference$(
-      NSStringFromString("required")
-    );
+    keyRequest.setUserVerificationPreference$(NSStringFromString("required"));
   } else if (userVerificationPreference === "discouraged") {
-    platformKeyRequest.setUserVerificationPreference$(
+    keyRequest.setUserVerificationPreference$(
       NSStringFromString("discouraged")
     );
   }
 
-  // platformKeyRequest.largeBlob = ???
-  const largeBlobRead = enabledExtensions.includes("largeBlobRead");
-  const largeBlobWrite = enabledExtensions.includes("largeBlobWrite");
-  if (largeBlobRead) {
-    const operation =
-      ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Read;
-    const largeBlobInput =
-      createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
-        operation
-      );
-
-    platformKeyRequest.setLargeBlob$(largeBlobInput);
-  } else if (largeBlobWrite) {
-    if (additionalOptions.largeBlobDataToWrite) {
+  // keyRequest.largeBlob = ??? (Only available for platform authenticator)
+  if (type === "platform") {
+    const largeBlobRead = enabledExtensions.includes("largeBlobRead");
+    const largeBlobWrite = enabledExtensions.includes("largeBlobWrite");
+    if (largeBlobRead) {
       const operation =
-        ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Write;
+        ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Read;
       const largeBlobInput =
         createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
           operation
         );
 
-      largeBlobInput.setDataToWrite$(
-        NSDataFromBuffer(additionalOptions.largeBlobDataToWrite)
-      );
-      platformKeyRequest.setLargeBlob$(largeBlobInput);
-    } else {
-      console.warn(
-        "[electron-webauthn] largeBlobWrite is enabled but largeBlobDataToWrite is not provided, skipping large blob write"
-      );
+      keyRequest.setLargeBlob$(largeBlobInput);
+    } else if (largeBlobWrite) {
+      if (additionalOptions.largeBlobDataToWrite) {
+        const operation =
+          ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Write;
+        const largeBlobInput =
+          createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
+            operation
+          );
+
+        largeBlobInput.setDataToWrite$(
+          NSDataFromBuffer(additionalOptions.largeBlobDataToWrite)
+        );
+        keyRequest.setLargeBlob$(largeBlobInput);
+      } else {
+        console.warn(
+          "[electron-webauthn] largeBlobWrite is enabled but largeBlobDataToWrite is not provided, skipping large blob write"
+        );
+      }
     }
   }
 
-  // platformKeyRequest.prf = ???
-  if (enabledExtensions.includes("prf")) {
+  // keyRequest.prf = ??? (Only available for platform authenticator)
+  if (type === "platform" && enabledExtensions.includes("prf")) {
     if (additionalOptions.prf || additionalOptions.prfByCredential) {
       let inputValues: _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues | null =
         null;
@@ -180,13 +158,51 @@ function getCredential(
           inputValues,
           perCredentialInputValues
         );
-      platformKeyRequest.setPrf$(prfInput);
+      keyRequest.setPrf$(prfInput);
     } else {
       console.warn(
         "[electron-webauthn] prf is enabled but prf or prfByCredential is not provided, skipping PRF"
       );
     }
   }
+}
+
+function getCredential(
+  rpid: string,
+  challenge: Buffer,
+  nativeWindowHandle: Buffer,
+  origin: string,
+  enabledExtensions: CredentialAssertionExtensions[] = [],
+  allowedCredentialIds: Buffer[],
+  userVerificationPreference?: UserVerificationPreference,
+  additionalOptions: GetCredentialAdditionalOptions = {}
+): Promise<GetCredentialResult> {
+  const { promise, resolve, reject } =
+    PromiseWithResolvers<GetCredentialResult>();
+
+  // Create NS objects
+  const NS_rpID = NSStringFromString(rpid);
+
+  // let challenge: Data // Obtain this from the server.
+  const NS_challenge = NSDataFromBuffer(challenge);
+
+  // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
+  const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
+
+  // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
+  const platformKeyRequest =
+    platformProvider.createCredentialAssertionRequestWithChallenge$(
+      NS_challenge
+    );
+
+  setupPublicKeyCredentialRequest(
+    "platform",
+    platformKeyRequest,
+    userVerificationPreference,
+    enabledExtensions,
+    allowedCredentialIds,
+    additionalOptions
+  );
 
   // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
   const securityKeyProvider =
@@ -198,20 +214,14 @@ function getCredential(
       NS_challenge
     );
 
-  // securityKeyRequest.userVerificationPreference = ???
-  if (userVerificationPreference === "preferred") {
-    securityKeyRequest.setUserVerificationPreference$(
-      NSStringFromString("preferred")
-    );
-  } else if (userVerificationPreference === "required") {
-    securityKeyRequest.setUserVerificationPreference$(
-      NSStringFromString("required")
-    );
-  } else if (userVerificationPreference === "discouraged") {
-    securityKeyRequest.setUserVerificationPreference$(
-      NSStringFromString("discouraged")
-    );
-  }
+  setupPublicKeyCredentialRequest(
+    "security-key",
+    securityKeyRequest,
+    userVerificationPreference,
+    enabledExtensions,
+    allowedCredentialIds,
+    additionalOptions
+  );
 
   // let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
   const requestsArray = NSArrayFromObjects([
