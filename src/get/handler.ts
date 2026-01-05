@@ -275,6 +275,14 @@ function getCredential(
       const prfFirst = prf?.first ? prf.first() : null;
       const prfSecond = prf?.second ? prf.second() : null;
 
+      let largeBlobBuffer: Buffer | null = null;
+      if (credential.largeBlob()) {
+        const largeBlobData = credential.largeBlob().readData();
+        if (largeBlobData) {
+          largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
+        }
+      }
+
       resolve({
         id,
         authenticatorAttachment,
@@ -288,9 +296,7 @@ function getCredential(
           prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
           prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
         ],
-        largeBlob: credential.largeBlob()
-          ? bufferFromNSDataDirect(credential.largeBlob().readData())
-          : null,
+        largeBlob: largeBlobBuffer,
       });
 
       finished(true);
