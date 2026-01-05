@@ -21,7 +21,7 @@ import {
   clientDataJsonBufferToHash,
   PromiseWithResolvers,
 } from "../helpers/index.js";
-import { serializeOrigin } from "../helpers/origin.js";
+import { isSameOrigin, serializeOrigin } from "../helpers/origin.js";
 import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 import {
   removeClientDataHash,
@@ -46,10 +46,8 @@ export type UserVerificationPreference =
   | "required"
   | "discouraged";
 
-export type CredentialAssertionExtensions =
-  | "largeBlobRead"
-  | "largeBlobWrite"
-  | "prf";
+const VALID_EXTENSIONS = ["largeBlobRead", "largeBlobWrite", "prf"] as const;
+export type CredentialAssertionExtensions = (typeof VALID_EXTENSIONS)[number];
 
 export interface GetCredentialResult {
   id: Buffer;
@@ -70,6 +68,9 @@ export interface GetCredentialAdditionalOptions {
   // prf extension
   prf?: PRFInput;
   prfByCredential?: Record<string, PRFInput>;
+
+  // iframes handling
+  topFrameOrigin?: string;
 }
 
 function setupPublicKeyCredentialRequest(
@@ -170,6 +171,14 @@ function setupPublicKeyCredentialRequest(
   }
 }
 
+type WebauthnGetOperationClientData = {
+  type: "webauthn.get";
+  challenge: string;
+  origin: string;
+  topOrigin?: string;
+  crossOrigin: boolean;
+};
+
 function getCredential(
   rpid: string,
   challenge: Buffer,
@@ -238,12 +247,23 @@ function getCredential(
   // Generate our own client data instead of letting apple generate it
   //  This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
   const serializedOrigin = serializeOrigin(origin);
-  const clientData = {
+  const clientData: WebauthnGetOperationClientData = {
     type: "webauthn.get",
     challenge: bufferToBase64Url(challenge),
     origin: serializedOrigin,
     crossOrigin: false,
   };
+
+  if (additionalOptions.topFrameOrigin) {
+    const sameOrigin = isSameOrigin(origin, additionalOptions.topFrameOrigin);
+    if (!sameOrigin) {
+      const serializedTopFrameOrigin = serializeOrigin(
+        additionalOptions.topFrameOrigin
+      );
+      clientData.topOrigin = serializedTopFrameOrigin;
+      clientData.crossOrigin = true;
+    }
+  }
 
   const clientDataJSON = JSON.stringify(clientData);
   const clientDataBuffer = Buffer.from(clientDataJSON, "utf-8");
