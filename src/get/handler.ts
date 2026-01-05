@@ -20,8 +20,8 @@ import {
   bufferToBase64Url,
   clientDataJsonBufferToHash,
   PromiseWithResolvers,
-  serializeOrigin,
-} from "../helpers.js";
+} from "../helpers/index.js";
+import { serializeOrigin } from "../helpers/origin.js";
 import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 import {
   removeClientDataHash,
@@ -34,7 +34,7 @@ import { createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput } from 
 import { ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-assertion-operation.js";
 import { createASAuthorizationPublicKeyCredentialPRFAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input.js";
 import { type _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input-valuesas-authorization-public-key-credential-prf-assertion-input-values.js";
-import { type PRFInput, createPRFInput } from "../prf.js";
+import { type PRFInput, createPRFInput } from "../helpers/prf.js";
 import {
   NSDictionaryFromKeysAndValues,
   type _NSDictionary,
@@ -64,7 +64,10 @@ export interface GetCredentialResult {
 }
 
 export interface GetCredentialAdditionalOptions {
+  // largeBlob extension
   largeBlobDataToWrite?: Buffer;
+
+  // prf extension
   prf?: PRFInput;
   prfByCredential?: Record<string, PRFInput>;
 }

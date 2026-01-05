@@ -1,4 +1,4 @@
-import { PromiseWithResolvers } from "../helpers.js";
+import { PromiseWithResolvers } from "../helpers/index.js";
 
 export interface CreateCredentialResult {}
 
