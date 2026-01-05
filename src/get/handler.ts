@@ -60,6 +60,7 @@ export interface GetCredentialResult {
   userHandle: Buffer;
   prf: [Buffer | null, Buffer | null];
   largeBlob: Buffer | null;
+  largeBlobWritten: boolean | null;
 }
 
 export interface GetCredentialAdditionalOptions {
@@ -276,10 +277,13 @@ function getCredential(
       const prfSecond = prf?.second ? prf.second() : null;
 
       let largeBlobBuffer: Buffer | null = null;
+      let largeBlobWritten: boolean | null = null;
       if (credential.largeBlob()) {
         const largeBlobData = credential.largeBlob().readData();
         if (largeBlobData) {
           largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
+        } else {
+          largeBlobWritten = credential.largeBlob().didWrite();
         }
       }
 
@@ -297,6 +301,7 @@ function getCredential(
           prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
         ],
         largeBlob: largeBlobBuffer,
+        largeBlobWritten,
       });
 
       finished(true);
