@@ -69,7 +69,7 @@ export const NSData = Foundation.NSData as unknown as typeof _NSData;
  * @param buffer The Buffer object
  * @returns An NSData object
  */
-export function NSDataFromBuffer(buffer: Buffer): NobjcObject {
+export function NSDataFromBuffer(buffer: Buffer): _NSData {
   return NSData.dataWithBytes$length$(buffer, buffer.length);
 }
 

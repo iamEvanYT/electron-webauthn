@@ -29,12 +29,17 @@ import {
 } from "../get/authorization-controller.js";
 import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
 import type { _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion } from "../objc/authentication-services/as-authorization-platform-security-key-credential-assertion.js";
+import { createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-large-blob-assertion-input.js";
+import { ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-assertion-operation.js";
+import { NSNumberFromInteger } from "../objc/foundation/nsinteger.js";
 
 type AuthenticatorAttachment = "platform" | "cross-platform";
 export type UserVerificationPreference =
   | "preferred"
   | "required"
   | "discouraged";
+
+export type CredentialAssertionExtensions = "largeBlobRead" | "largeBlobWrite";
 
 export interface GetCredentialResult {
   id: Buffer;
@@ -47,13 +52,19 @@ export interface GetCredentialResult {
   largeBlob: Buffer | null;
 }
 
+export interface GetCredentialAdditionalOptions {
+  largeBlobDataToWrite?: Buffer;
+}
+
 function getCredential(
   rpid: string,
   challenge: Buffer,
   nativeWindowHandle: Buffer,
   origin: string,
+  enabledExtensions: CredentialAssertionExtensions[] = [],
   allowedCredentialIds: Buffer[],
-  userVerificationPreference?: UserVerificationPreference
+  userVerificationPreference?: UserVerificationPreference,
+  additionalOptions: GetCredentialAdditionalOptions = {}
 ): Promise<GetCredentialResult> {
   const { promise, resolve, reject } =
     PromiseWithResolvers<GetCredentialResult>();
@@ -86,6 +97,38 @@ function getCredential(
     platformKeyRequest.setUserVerificationPreference$(
       NSStringFromString("discouraged")
     );
+  }
+
+  // platformKeyRequest.largeBlob = ???
+  const largeBlobRead = enabledExtensions.includes("largeBlobRead");
+  const largeBlobWrite = enabledExtensions.includes("largeBlobWrite");
+  if (largeBlobRead) {
+    const operation =
+      ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Read;
+    const largeBlobInput =
+      createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
+        operation
+      );
+
+    platformKeyRequest.setLargeBlob$(largeBlobInput);
+  } else if (largeBlobWrite) {
+    if (additionalOptions.largeBlobDataToWrite) {
+      const operation =
+        ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Write;
+      const largeBlobInput =
+        createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
+          operation
+        );
+
+      largeBlobInput.setDataToWrite$(
+        NSDataFromBuffer(additionalOptions.largeBlobDataToWrite)
+      );
+      platformKeyRequest.setLargeBlob$(largeBlobInput);
+    } else {
+      console.warn(
+        "[electron-webauthn] largeBlobWrite is enabled but largeBlobDataToWrite is not provided, skipping large blob write"
+      );
+    }
   }
 
   // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")

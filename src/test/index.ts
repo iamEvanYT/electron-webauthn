@@ -11,6 +11,7 @@ const result = getCredential(
   Buffer.from("challenge"),
   nsViewPointer,
   "https://example.com",
+  [],
   []
 );
 console.log("Result:", result);
