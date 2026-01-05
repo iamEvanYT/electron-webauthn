@@ -21,9 +21,9 @@ export const ASAuthorizationPublicKeyCredentialLargeBlobAssertionInput =
 // Helper Functions
 
 /**
- * Create an ASAuthorizationController instance
- * @param authorizationRequests An NSArray of authorization requests
- * @returns An initialized controller instance
+ * Create an ASAuthorizationPublicKeyCredentialLargeBlobAssertionInput instance
+ * @param operation The operation to perform
+ * @returns An initialized assertion input instance
  */
 export function createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
   operation: number

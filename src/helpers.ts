@@ -109,3 +109,21 @@ export function bufferToBase64Url(buffer: Buffer): string {
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
+
+// Base64URL (RFC 4648) -> Uint8Array
+export function base64UrlToBuffer(b64url: string): Buffer {
+  if (typeof b64url !== "string")
+    throw new TypeError("base64Url must be a string");
+
+  // base64url -> base64
+  let b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+
+  // add padding if missing
+  const pad = b64.length % 4;
+  if (pad === 2) b64 += "==";
+  else if (pad === 3) b64 += "=";
+  else if (pad !== 0) throw new Error("Invalid base64url length");
+
+  // decode
+  return Buffer.from(b64, "base64");
+}

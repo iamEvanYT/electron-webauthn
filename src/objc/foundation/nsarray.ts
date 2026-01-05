@@ -2,7 +2,7 @@ import { Foundation } from "./index.js";
 import type { NobjcObject } from "objc-js";
 
 // Class declaration
-declare class _NSArray extends NobjcObject {
+export declare class _NSArray extends NobjcObject {
   static arrayWithObject$(object: NobjcObject): _NSArray;
   static arrayWithArray$(array: _NSArray): _NSArray;
   static array(): _NSArray;

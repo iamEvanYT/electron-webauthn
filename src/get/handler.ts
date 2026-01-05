@@ -16,6 +16,7 @@ import { NSStringFromString } from "../objc/foundation/nsstring.js";
 import type { _NSError } from "../objc/foundation/nserror.js";
 import type { _NSView } from "../objc/foundation/nsview.js";
 import {
+  base64UrlToBuffer,
   bufferToBase64Url,
   clientDataJsonBufferToHash,
   PromiseWithResolvers,
@@ -31,7 +32,13 @@ import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentica
 import type { _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion } from "../objc/authentication-services/as-authorization-platform-security-key-credential-assertion.js";
 import { createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-large-blob-assertion-input.js";
 import { ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-assertion-operation.js";
-import { NSNumberFromInteger } from "../objc/foundation/nsinteger.js";
+import { createASAuthorizationPublicKeyCredentialPRFAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input.js";
+import { type _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input-valuesas-authorization-public-key-credential-prf-assertion-input-values.js";
+import { type PRFInput, createPRFInput } from "../prf.js";
+import {
+  NSDictionaryFromKeysAndValues,
+  type _NSDictionary,
+} from "../objc/foundation/nsdictionary.js";
 
 type AuthenticatorAttachment = "platform" | "cross-platform";
 export type UserVerificationPreference =
@@ -39,7 +46,10 @@ export type UserVerificationPreference =
   | "required"
   | "discouraged";
 
-export type CredentialAssertionExtensions = "largeBlobRead" | "largeBlobWrite";
+export type CredentialAssertionExtensions =
+  | "largeBlobRead"
+  | "largeBlobWrite"
+  | "prf";
 
 export interface GetCredentialResult {
   id: Buffer;
@@ -54,6 +64,8 @@ export interface GetCredentialResult {
 
 export interface GetCredentialAdditionalOptions {
   largeBlobDataToWrite?: Buffer;
+  prf?: PRFInput;
+  prfByCredential?: Record<string, PRFInput>;
 }
 
 function getCredential(
@@ -127,6 +139,50 @@ function getCredential(
     } else {
       console.warn(
         "[electron-webauthn] largeBlobWrite is enabled but largeBlobDataToWrite is not provided, skipping large blob write"
+      );
+    }
+  }
+
+  // platformKeyRequest.prf = ???
+  if (enabledExtensions.includes("prf")) {
+    if (additionalOptions.prf || additionalOptions.prfByCredential) {
+      let inputValues: _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues | null =
+        null;
+      if (additionalOptions.prf) {
+        inputValues = createPRFInput(additionalOptions.prf);
+      }
+
+      let perCredentialInputValues: _NSDictionary | null = null;
+      // evalByCredential is only applicable during assertions when allowCredentials is not empty. (https://www.w3.org/TR/webauthn-3/)
+      if (
+        additionalOptions.prfByCredential &&
+        allowedCredentialIds.length > 0
+      ) {
+        const keys: _NSData[] = [];
+        const values: _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues[] =
+          [];
+
+        for (const [credentialId, prfInput] of Object.entries(
+          additionalOptions.prfByCredential
+        )) {
+          const credentialIdBuffer = base64UrlToBuffer(credentialId);
+          const credentialIdData = NSDataFromBuffer(credentialIdBuffer);
+          keys.push(credentialIdData);
+          values.push(createPRFInput(prfInput));
+        }
+
+        perCredentialInputValues = NSDictionaryFromKeysAndValues(keys, values);
+      }
+
+      const prfInput =
+        createASAuthorizationPublicKeyCredentialPRFAssertionInput(
+          inputValues,
+          perCredentialInputValues
+        );
+      platformKeyRequest.setPrf$(prfInput);
+    } else {
+      console.warn(
+        "[electron-webauthn] prf is enabled but prf or prfByCredential is not provided, skipping PRF"
       );
     }
   }
