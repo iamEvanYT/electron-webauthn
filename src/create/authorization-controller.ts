@@ -1,11 +1,10 @@
 import { NobjcClass, NobjcObject, getPointer } from "objc-js";
 import { NSDataFromBuffer, type _NSData } from "../objc/foundation/nsdata.js";
 import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
-import { Foundation } from "../objc/foundation/index.js";
-import { AuthenticationServices } from "../objc/authentication-services/index.js";
 import type { ExcludeCredential } from "./handler.js";
 import { NSStringFromString } from "../objc/foundation/nsstring.js";
-import { createPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-c-public-key-credential-descriptor.js";
+import { createASCPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-c-public-key-credential-descriptor.js";
+import { NSNumberFromInteger } from "../objc/foundation/nsinteger.js";
 
 const createControllerState = new Map<
   string,
@@ -59,7 +58,7 @@ export const WebauthnCreateController = NobjcClass.define({
 
         // Grab the registration options, set the client data hash, and set a copy of the registration options back on the context
         const selfPointer = getObjectPointerString(self);
-        if (createControllerState.has(selfPointer)) {
+        if (context && createControllerState.has(selfPointer)) {
           const registrationOptions =
             context.platformKeyCredentialCreationOptions();
 
@@ -76,10 +75,10 @@ export const WebauthnCreateController = NobjcClass.define({
           registrationOptions.setChallenge$(null);
 
           // Set supported algorithm identifiers
-          const supportedAlgos: number[] = [];
+          const supportedAlgos: NobjcObject[] = [];
           for (const param of pubKeyCredParams) {
             if (param.type === "public-key") {
-              supportedAlgos.push(param.algorithm);
+              supportedAlgos.push(NSNumberFromInteger(param.algorithm));
             }
           }
           if (supportedAlgos.length > 0) {
@@ -106,10 +105,11 @@ export const WebauthnCreateController = NobjcClass.define({
             const credentialID = NSDataFromBuffer(cred.id);
             const transportsArray = NSArrayFromObjects(transports);
 
-            const initializedDescriptor = createPublicKeyCredentialDescriptor(
-              credentialID,
-              transportsArray
-            );
+            const initializedDescriptor =
+              createASCPublicKeyCredentialDescriptor(
+                credentialID,
+                transportsArray
+              );
             excludeList.push(initializedDescriptor);
           }
           if (excludeList.length > 0) {

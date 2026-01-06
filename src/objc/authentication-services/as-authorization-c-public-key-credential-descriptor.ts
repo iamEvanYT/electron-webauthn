@@ -2,17 +2,17 @@ import { AuthenticationServices } from "./index.js";
 import type { NobjcObject } from "objc-js";
 
 /**
- * ASAuthorizationPublicKeyCredentialDescriptor
+ * ASCPublicKeyCredentialDescriptor
  *
  * A descriptor that identifies a public key credential with transport options.
- * https://developer.apple.com/documentation/authenticationservices/asauthorizationpublickeycredentialdescriptor?language=objc
+ * https://developer.apple.com/documentation/authenticationservices/ascpublickeycredentialdescriptor?language=objc
  *
  * This class is used to specify which credentials are acceptable for authentication
  * along with their supported transports. It's typically used in assertion requests
  * to indicate which credentials the relying party is willing to accept and how they
  * can be accessed.
  */
-declare class _ASAuthorizationPublicKeyCredentialDescriptor extends NobjcObject {
+declare class _ASCPublicKeyCredentialDescriptor extends NobjcObject {
   /**
    * Creates a credential descriptor with the specified credential identifier and transports.
    *
@@ -24,7 +24,7 @@ declare class _ASAuthorizationPublicKeyCredentialDescriptor extends NobjcObject 
   initWithCredentialID$transports$(
     credentialID: NobjcObject,
     transports: NobjcObject
-  ): _ASAuthorizationPublicKeyCredentialDescriptor;
+  ): _ASCPublicKeyCredentialDescriptor;
 
   /**
    * The credential identifier.
@@ -47,25 +47,23 @@ declare class _ASAuthorizationPublicKeyCredentialDescriptor extends NobjcObject 
   transports(): NobjcObject;
 }
 
-export const ASAuthorizationPublicKeyCredentialDescriptor =
-  AuthenticationServices.ASAuthorizationPublicKeyCredentialDescriptor as unknown as typeof _ASAuthorizationPublicKeyCredentialDescriptor;
+export const ASCPublicKeyCredentialDescriptor =
+  AuthenticationServices.ASCPublicKeyCredentialDescriptor as unknown as typeof _ASCPublicKeyCredentialDescriptor;
 
-export type { _ASAuthorizationPublicKeyCredentialDescriptor };
+export type { _ASCPublicKeyCredentialDescriptor };
 
 // Helper Functions
 
 /**
- * Create an ASAuthorizationPublicKeyCredentialDescriptor instance
+ * Create an ASCPublicKeyCredentialDescriptor instance
  * @param credentialID The credential identifier (NSData)
  * @param transports An NSArray of transport strings
  * @returns An initialized credential descriptor
  */
-export function createPublicKeyCredentialDescriptor(
+export function createASCPublicKeyCredentialDescriptor(
   credentialID: NobjcObject,
   transports: NobjcObject
-): _ASAuthorizationPublicKeyCredentialDescriptor {
-  const instance = (
-    ASAuthorizationPublicKeyCredentialDescriptor as any
-  ).alloc();
+): _ASCPublicKeyCredentialDescriptor {
+  const instance = (ASCPublicKeyCredentialDescriptor as any).alloc();
   return instance.initWithCredentialID$transports$(credentialID, transports);
 }
