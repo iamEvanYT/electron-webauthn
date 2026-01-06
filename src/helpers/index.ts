@@ -1,5 +1,3 @@
-import { createHash } from "crypto";
-
 /**
  * Creates a Promise along with its resolve and reject callbacks.
  * This is a polyfill for the native Promise.withResolvers() method.
@@ -26,25 +24,6 @@ export function PromiseWithResolvers<T = void>(): {
     reject = rej;
   });
   return { promise, resolve: resolve!, reject: reject! };
-}
-
-/**
- * WebAuthn: clientDataHash = SHA-256(clientDataJSON_bytes)
- *
- * - Input must be the exact bytes of CollectedClientData JSON (UTF-8).
- * - Output is 32-byte SHA-256 digest.
- */
-export function clientDataJsonBufferToHash(clientDataJSON: Buffer): Buffer {
-  if (!Buffer.isBuffer(clientDataJSON)) {
-    throw new TypeError(
-      "clientDataJsonBufferToHash: clientDataJSON must be a Buffer"
-    );
-  }
-  if (clientDataJSON.length === 0) {
-    throw new RangeError("clientDataJsonBufferToHash: clientDataJSON is empty");
-  }
-
-  return createHash("sha256").update(clientDataJSON).digest();
 }
 
 /**

@@ -1,7 +1,6 @@
-import { fromPointer, type NobjcObject } from "objc-js";
+import { type NobjcObject } from "objc-js";
 import { createAuthorizationControllerDelegate } from "../objc/authentication-services/as-authorization-controller-delegate.js";
 import { ASAuthorizationController } from "../objc/authentication-services/as-authorization-controller.js";
-import { createPresentationContextProvider } from "../objc/authentication-services/as-authorization-controller-presentation-context-providing.js";
 import { createPlatformPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-platform-public-key-credential-provider.js";
 import { createPlatformPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-platform-public-key-credential-descriptor.js";
 import type { _ASAuthorization } from "../objc/authentication-services/as-authorization.js";
@@ -15,13 +14,7 @@ import {
 import { NSStringFromString } from "../objc/foundation/nsstring.js";
 import type { _NSError } from "../objc/foundation/nserror.js";
 import type { _NSView } from "../objc/foundation/nsview.js";
-import {
-  base64UrlToBuffer,
-  bufferToBase64Url,
-  clientDataJsonBufferToHash,
-  PromiseWithResolvers,
-} from "../helpers/index.js";
-import { isSameOrigin, serializeOrigin } from "../helpers/origin.js";
+import { base64UrlToBuffer, PromiseWithResolvers } from "../helpers/index.js";
 import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 import {
   removeClientDataHash,
@@ -39,6 +32,11 @@ import {
   NSDictionaryFromKeysAndValues,
   type _NSDictionary,
 } from "../objc/foundation/nsdictionary.js";
+import {
+  generateClientDataInfo,
+  generateWebauthnClientData,
+} from "../helpers/client-data.js";
+import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 
 type AuthenticatorAttachment = "platform" | "cross-platform";
 export type UserVerificationPreference =
@@ -171,14 +169,6 @@ function setupPublicKeyCredentialRequest(
   }
 }
 
-type WebauthnGetOperationClientData = {
-  type: "webauthn.get";
-  challenge: string;
-  origin: string;
-  topOrigin?: string;
-  crossOrigin: boolean;
-};
-
 function getCredential(
   rpid: string,
   challenge: Buffer,
@@ -246,28 +236,32 @@ function getCredential(
 
   // Generate our own client data instead of letting apple generate it
   //  This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
-  const serializedOrigin = serializeOrigin(origin);
-  const clientData: WebauthnGetOperationClientData = {
-    type: "webauthn.get",
-    challenge: bufferToBase64Url(challenge),
-    origin: serializedOrigin,
-    crossOrigin: false,
-  };
+  const clientData = generateWebauthnClientData(
+    origin,
+    challenge,
+    additionalOptions.topFrameOrigin
+  );
+  // const serializedOrigin = serializeOrigin(origin);
+  // const clientData: WebauthnGetOperationClientData = {
+  //   type: "webauthn.get",
+  //   challenge: bufferToBase64Url(challenge),
+  //   origin: serializedOrigin,
+  //   crossOrigin: false,
+  // };
 
-  if (additionalOptions.topFrameOrigin) {
-    const sameOrigin = isSameOrigin(origin, additionalOptions.topFrameOrigin);
-    if (!sameOrigin) {
-      const serializedTopFrameOrigin = serializeOrigin(
-        additionalOptions.topFrameOrigin
-      );
-      clientData.topOrigin = serializedTopFrameOrigin;
-      clientData.crossOrigin = true;
-    }
-  }
+  // if (additionalOptions.topFrameOrigin) {
+  //   const sameOrigin = isSameOrigin(origin, additionalOptions.topFrameOrigin);
+  //   if (!sameOrigin) {
+  //     const serializedTopFrameOrigin = serializeOrigin(
+  //       additionalOptions.topFrameOrigin
+  //     );
+  //     clientData.topOrigin = serializedTopFrameOrigin;
+  //     clientData.crossOrigin = true;
+  //   }
+  // }
 
-  const clientDataJSON = JSON.stringify(clientData);
-  const clientDataBuffer = Buffer.from(clientDataJSON, "utf-8");
-  const clientDataHash = clientDataJsonBufferToHash(clientDataBuffer);
+  const { clientDataHash, clientDataBuffer } =
+    generateClientDataInfo(clientData);
 
   setClientDataHash(authController, clientDataHash);
 
@@ -353,14 +347,8 @@ function getCredential(
   authController.setDelegate$(delegate);
 
   // authController.presentationContextProvider = self
-  const presentationContextProvider = createPresentationContextProvider({
-    presentationAnchorForAuthorizationController: () => {
-      // Return the NSWindow to present the authorization UI in
-      const nsView = fromPointer(nativeWindowHandle) as unknown as _NSView;
-      const nsWindow = nsView.window();
-      return nsWindow;
-    },
-  });
+  const presentationContextProvider =
+    createPresentationContextProviderFromNativeWindowHandle(nativeWindowHandle);
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
