@@ -1,12 +1,12 @@
 import { getPointer } from "objc-js";
 import { createEmptyWindow, getNativeWindowHandle } from "./window.js";
-import { getCredential } from "../index.js";
+import { getCredentialInternal } from "../get/internal-handler.js";
 
 const window = createEmptyWindow();
 const nsView = getNativeWindowHandle(window);
 const nsViewPointer = getPointer(nsView);
 
-const result = getCredential(
+const result = getCredentialInternal(
   "example.com",
   Buffer.from("challenge"),
   nsViewPointer,

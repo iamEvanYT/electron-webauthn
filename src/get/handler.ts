@@ -1,360 +1,276 @@
-import { type NobjcObject } from "objc-js";
-import { createAuthorizationControllerDelegate } from "../objc/authentication-services/as-authorization-controller-delegate.js";
-import { ASAuthorizationController } from "../objc/authentication-services/as-authorization-controller.js";
-import { createPlatformPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-platform-public-key-credential-provider.js";
-import { createPlatformPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-platform-public-key-credential-descriptor.js";
-import type { _ASAuthorization } from "../objc/authentication-services/as-authorization.js";
-import type { _ASAuthorizationPlatformPublicKeyCredentialAssertion } from "../objc/authentication-services/as-authorization-platform-public-key-credential-assertion.js";
-import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
+import { bufferSourceToBuffer, bufferToBase64Url } from "../helpers/index.js";
+import type { PRFInput } from "../helpers/prf.js";
+import { isRpIdAllowedForOrigin } from "../helpers/rpid.js";
+import { isNumber, isString } from "../helpers/validation.js";
 import {
-  type _NSData,
-  bufferFromNSDataDirect,
-  NSDataFromBuffer,
-} from "../objc/foundation/nsdata.js";
-import { NSStringFromString } from "../objc/foundation/nsstring.js";
-import type { _NSError } from "../objc/foundation/nserror.js";
-import type { _NSView } from "../objc/foundation/nsview.js";
-import { base64UrlToBuffer, PromiseWithResolvers } from "../helpers/index.js";
-import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
-import {
-  removeClientDataHash,
-  setClientDataHash,
-  WebauthnGetController,
-} from "../get/authorization-controller.js";
-import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
-import type { _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion } from "../objc/authentication-services/as-authorization-platform-security-key-credential-assertion.js";
-import { createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-large-blob-assertion-input.js";
-import { ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-assertion-operation.js";
-import { createASAuthorizationPublicKeyCredentialPRFAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input.js";
-import { type _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input-valuesas-authorization-public-key-credential-prf-assertion-input-values.js";
-import { type PRFInput, createPRFInput } from "../helpers/prf.js";
-import {
-  NSDictionaryFromKeysAndValues,
-  type _NSDictionary,
-} from "../objc/foundation/nsdictionary.js";
-import {
-  generateClientDataInfo,
-  generateWebauthnClientData,
-} from "../helpers/client-data.js";
-import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
+  getCredentialInternal,
+  type CredentialAssertionExtensions,
+} from "./internal-handler.js";
 
-type AuthenticatorAttachment = "platform" | "cross-platform";
-export type UserVerificationPreference =
-  | "preferred"
-  | "required"
-  | "discouraged";
-
-const VALID_EXTENSIONS = ["largeBlobRead", "largeBlobWrite", "prf"] as const;
-export type CredentialAssertionExtensions = (typeof VALID_EXTENSIONS)[number];
-
-export interface GetCredentialResult {
-  id: Buffer;
-  authenticatorAttachment: AuthenticatorAttachment;
-  clientDataJSON: Buffer;
-  authenticatorData: Buffer;
-  signature: Buffer;
-  userHandle: Buffer;
-  prf: [Buffer | null, Buffer | null];
-  largeBlob: Buffer | null;
-  largeBlobWritten: boolean | null;
+/**
+ * The result of getting a credential.
+ */
+export interface GetCredentialSuccessData {
+  credentialId: string;
+  clientDataJSON: string;
+  authenticatorData: string;
+  signature: string;
+  userHandle: string;
+  extensions?: {
+    prf?: {
+      results?: {
+        first: string; // b64 encoded
+        second?: string; // b64 encoded
+      };
+    };
+    largeBlob?: {
+      blob?: string; // b64 encoded
+      written?: boolean;
+    };
+  };
 }
 
-export interface GetCredentialAdditionalOptions {
+interface WebauthnGetRequestOptions {
+  // Origins //
+
+  /**
+   * The origin of the requesting document.
+   */
+  currentOrigin: string;
+
+  /**
+   * The origin of the top frame document.
+   *
+   * If the requesting document is an iframe, this should be the origin of the top frame document.
+   * If not, it should be left blank.
+   */
+  topFrameOrigin: string | undefined;
+
+  // Public Suffix check //
+
+  /**
+   * Return true if the input is a public suffix (eTLD), e.g. "com", "co.uk".
+   *
+   * Strongly recommended to implement using PSL (e.g. tldts).
+   */
+  isPublicSuffix?: (domain: string) => boolean;
+
+  // Others //
+
+  /**
+   * Can be found in Electron with `BrowserWindow.getNativeWindowHandle()`.
+   *
+   * Otherwise, this is the pointer to a NSView object.
+   */
+  nativeWindowHandle: Buffer;
+}
+
+interface GetCredentialSuccessResult {
+  success: true;
+  data: GetCredentialSuccessData;
+}
+interface GetCredentialErrorResult {
+  success: false;
+  error: "TypeError" | "AbortError" | "NotAllowedError" | "SecurityError";
+}
+export type GetCredentialResult =
+  | GetCredentialSuccessResult
+  | GetCredentialErrorResult;
+
+interface ExtensionsConfigurationResult {
+  extensions: CredentialAssertionExtensions[];
+
   // largeBlob extension
-  largeBlobDataToWrite?: Buffer;
+  largeBlobWriteBuffer?: Buffer;
 
   // prf extension
   prf?: PRFInput;
   prfByCredential?: Record<string, PRFInput>;
-
-  // iframes handling
-  topFrameOrigin?: string;
 }
-
-function setupPublicKeyCredentialRequest(
-  type: "platform" | "security-key",
-  keyRequest: NobjcObject,
-  userVerificationPreference: UserVerificationPreference,
-  enabledExtensions: CredentialAssertionExtensions[],
-  allowedCredentialIds: Buffer[],
-  additionalOptions: GetCredentialAdditionalOptions
-) {
-  // keyRequest.userVerificationPreference = ???
-  if (userVerificationPreference === "preferred") {
-    keyRequest.setUserVerificationPreference$(NSStringFromString("preferred"));
-  } else if (userVerificationPreference === "required") {
-    keyRequest.setUserVerificationPreference$(NSStringFromString("required"));
-  } else if (userVerificationPreference === "discouraged") {
-    keyRequest.setUserVerificationPreference$(
-      NSStringFromString("discouraged")
-    );
+function getExtensionsConfiguration(
+  extensionsData: AuthenticationExtensionsClientInputs | undefined
+): ExtensionsConfigurationResult {
+  if (!(extensionsData && typeof extensionsData === "object")) {
+    return {
+      extensions: [],
+    };
   }
 
-  // keyRequest.largeBlob = ??? (Only available for platform authenticator)
-  if (type === "platform") {
-    const largeBlobRead = enabledExtensions.includes("largeBlobRead");
-    const largeBlobWrite = enabledExtensions.includes("largeBlobWrite");
-    if (largeBlobRead) {
-      const operation =
-        ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Read;
-      const largeBlobInput =
-        createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
-          operation
-        );
+  const extensions: CredentialAssertionExtensions[] = [];
 
-      keyRequest.setLargeBlob$(largeBlobInput);
-    } else if (largeBlobWrite) {
-      if (additionalOptions.largeBlobDataToWrite) {
-        const operation =
-          ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Write;
-        const largeBlobInput =
-          createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
-            operation
-          );
+  // largeBlob extension
+  let largeBlobWriteBuffer: Buffer | undefined;
+  if (extensionsData.largeBlob) {
+    const largeBlobConfig = extensionsData.largeBlob;
+    if (largeBlobConfig.read) {
+      extensions.push("largeBlobRead");
+    }
+    if (largeBlobConfig.write) {
+      extensions.push("largeBlobWrite");
+      largeBlobWriteBuffer = bufferSourceToBuffer(largeBlobConfig.write);
+    }
+  }
 
-        largeBlobInput.setDataToWrite$(
-          NSDataFromBuffer(additionalOptions.largeBlobDataToWrite)
-        );
-        keyRequest.setLargeBlob$(largeBlobInput);
-      } else {
-        console.warn(
-          "[electron-webauthn] largeBlobWrite is enabled but largeBlobDataToWrite is not provided, skipping large blob write"
-        );
+  // prf extension
+  let prf: PRFInput | undefined;
+  let prfByCredential: Record<string, PRFInput> | undefined;
+
+  const prfExtension = extensionsData.prf;
+  if (prfExtension && (prfExtension.eval || prfExtension.evalByCredential)) {
+    extensions.push("prf");
+
+    if (prfExtension.eval) {
+      prf = {
+        first: bufferSourceToBuffer(prfExtension.eval.first),
+        second: prfExtension.eval.second
+          ? bufferSourceToBuffer(prfExtension.eval.second)
+          : undefined,
+      };
+    }
+
+    if (prfExtension.evalByCredential) {
+      prfByCredential = {};
+      for (const [credId, value] of Object.entries(
+        prfExtension.evalByCredential
+      )) {
+        prfByCredential[credId] = {
+          first: bufferSourceToBuffer(value.first),
+          second: value.second ? bufferSourceToBuffer(value.second) : undefined,
+        };
       }
     }
   }
 
-  // keyRequest.prf = ??? (Only available for platform authenticator)
-  if (type === "platform" && enabledExtensions.includes("prf")) {
-    if (additionalOptions.prf || additionalOptions.prfByCredential) {
-      let inputValues: _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues | null =
-        null;
-      if (additionalOptions.prf) {
-        inputValues = createPRFInput(additionalOptions.prf);
-      }
-
-      let perCredentialInputValues: _NSDictionary | null = null;
-      // evalByCredential is only applicable during assertions when allowCredentials is not empty. (https://www.w3.org/TR/webauthn-3/)
-      if (
-        additionalOptions.prfByCredential &&
-        allowedCredentialIds.length > 0
-      ) {
-        const keys: _NSData[] = [];
-        const values: _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues[] =
-          [];
-
-        for (const [credentialId, prfInput] of Object.entries(
-          additionalOptions.prfByCredential
-        )) {
-          const credentialIdBuffer = base64UrlToBuffer(credentialId);
-          const credentialIdData = NSDataFromBuffer(credentialIdBuffer);
-          keys.push(credentialIdData);
-          values.push(createPRFInput(prfInput));
-        }
-
-        perCredentialInputValues = NSDictionaryFromKeysAndValues(keys, values);
-      }
-
-      const prfInput =
-        createASAuthorizationPublicKeyCredentialPRFAssertionInput(
-          inputValues,
-          perCredentialInputValues
-        );
-      keyRequest.setPrf$(prfInput);
-    } else {
-      console.warn(
-        "[electron-webauthn] prf is enabled but prf or prfByCredential is not provided, skipping PRF"
-      );
-    }
-  }
+  return {
+    extensions,
+    largeBlobWriteBuffer,
+    prf,
+    prfByCredential,
+  };
 }
 
-function getCredential(
-  rpid: string,
-  challenge: Buffer,
-  nativeWindowHandle: Buffer,
-  origin: string,
-  enabledExtensions: CredentialAssertionExtensions[] = [],
-  allowedCredentialIds: Buffer[],
-  userVerificationPreference?: UserVerificationPreference,
-  additionalOptions: GetCredentialAdditionalOptions = {}
+export async function getCredential(
+  publicKeyOptions: PublicKeyCredentialRequestOptions | undefined,
+  additionalOptions: WebauthnGetRequestOptions
 ): Promise<GetCredentialResult> {
-  const { promise, resolve, reject } =
-    PromiseWithResolvers<GetCredentialResult>();
+  // Check all the arguments
+  if (!publicKeyOptions) {
+    return null;
+  }
 
-  // Create NS objects
-  const NS_rpID = NSStringFromString(rpid);
+  const rpId = publicKeyOptions.rpId;
+  if (!isString(rpId)) {
+    return { success: false, error: "TypeError" };
+  }
 
-  // let challenge: Data // Obtain this from the server.
-  const NS_challenge = NSDataFromBuffer(challenge);
+  let timeout = publicKeyOptions.timeout;
+  if (!isNumber(timeout) || timeout <= 0) {
+    // 1 hour (max timeout)
+    timeout = 10 * 60 * 1000; // 10 minutes (default timeout)
+  } else if (timeout > 60 * 60 * 1000) {
+    // 1 hour (max timeout)
+    timeout = 60 * 60 * 1000;
+  }
+  // TODO: Handle timeout
 
-  // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
-  const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
+  const challenge = bufferSourceToBuffer(publicKeyOptions.challenge);
+  if (!challenge) {
+    return { success: false, error: "TypeError" };
+  }
 
-  // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
-  const platformKeyRequest =
-    platformProvider.createCredentialAssertionRequestWithChallenge$(
-      NS_challenge
-    );
+  const userVerification = publicKeyOptions.userVerification;
+  if (userVerification && !isString(userVerification)) {
+    return { success: false, error: "TypeError" };
+  }
 
-  setupPublicKeyCredentialRequest(
-    "platform",
-    platformKeyRequest,
-    userVerificationPreference,
-    enabledExtensions,
-    allowedCredentialIds,
-    additionalOptions
-  );
+  const allowedCredentialsArray: Buffer[] = [];
+  const allowedCredentials = publicKeyOptions.allowCredentials;
+  if (allowedCredentials && Array.isArray(allowedCredentials)) {
+    for (const allowedCredential of allowedCredentials) {
+      if (!(allowedCredential && typeof allowedCredential === "object"))
+        continue;
+      if (allowedCredential.type !== "public-key") continue;
+      const id = bufferSourceToBuffer(allowedCredential.id);
+      if (!id) continue;
+      allowedCredentialsArray.push(id);
+    }
+  }
 
-  // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
-  const securityKeyProvider =
-    createSecurityKeyPublicKeyCredentialProvider(NS_rpID);
+  const {
+    extensions: enabledExtensions,
+    largeBlobWriteBuffer,
+    prf,
+    prfByCredential,
+  } = getExtensionsConfiguration(publicKeyOptions.extensions);
 
-  // let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
-  const securityKeyRequest =
-    securityKeyProvider.createCredentialAssertionRequestWithChallenge$(
-      NS_challenge
-    );
+  // Validate environment
+  const { currentOrigin, topFrameOrigin, isPublicSuffix, nativeWindowHandle } =
+    additionalOptions;
+  const isRpIdAllowed = isRpIdAllowedForOrigin(currentOrigin, rpId, {
+    isPublicSuffix,
+  });
+  if (!isRpIdAllowed.ok) {
+    return { success: false, error: "NotAllowedError" };
+  }
 
-  setupPublicKeyCredentialRequest(
-    "security-key",
-    securityKeyRequest,
-    userVerificationPreference,
-    enabledExtensions,
-    allowedCredentialIds,
-    additionalOptions
-  );
-
-  // let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
-  const requestsArray = NSArrayFromObjects([
-    platformKeyRequest,
-    securityKeyRequest,
-  ]);
-  const authController: typeof ASAuthorizationController.prototype =
-    WebauthnGetController.alloc().initWithAuthorizationRequests$(requestsArray);
-  // OLD: const authController = createAuthorizationController(requestsArray);
-
-  // Generate our own client data instead of letting apple generate it
-  //  This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
-  const clientData = generateWebauthnClientData(
-    origin,
+  // Call the (kinda-native?) handler
+  const result = await getCredentialInternal(
+    rpId,
     challenge,
-    additionalOptions.topFrameOrigin
-  );
-  // const serializedOrigin = serializeOrigin(origin);
-  // const clientData: WebauthnGetOperationClientData = {
-  //   type: "webauthn.get",
-  //   challenge: bufferToBase64Url(challenge),
-  //   origin: serializedOrigin,
-  //   crossOrigin: false,
-  // };
+    nativeWindowHandle,
+    currentOrigin,
+    enabledExtensions,
+    allowedCredentialsArray,
+    userVerification,
+    {
+      topFrameOrigin,
+      largeBlobDataToWrite: largeBlobWriteBuffer,
+      prf,
+      prfByCredential,
+    }
+  ).catch((error: Error) => {
+    console.error("Error getting credential", error);
+    if (error.message.startsWith("The operation couldn’t be completed.")) {
+      return "NotAllowedError";
+    }
+    return "NotAllowedError";
+  });
 
-  // if (additionalOptions.topFrameOrigin) {
-  //   const sameOrigin = isSameOrigin(origin, additionalOptions.topFrameOrigin);
-  //   if (!sameOrigin) {
-  //     const serializedTopFrameOrigin = serializeOrigin(
-  //       additionalOptions.topFrameOrigin
-  //     );
-  //     clientData.topOrigin = serializedTopFrameOrigin;
-  //     clientData.crossOrigin = true;
-  //   }
-  // }
+  // Handle the result
+  if (typeof result === "string") {
+    if (result === "NotAllowedError") {
+      return { success: false, error: "NotAllowedError" };
+    }
+    return { success: false, error: "NotAllowedError" };
+  }
 
-  const { clientDataHash, clientDataBuffer } =
-    generateClientDataInfo(clientData);
-
-  setClientDataHash(authController, clientDataHash);
-
-  const finished = (_success: boolean) => {
-    removeClientDataHash(authController);
+  const data: GetCredentialSuccessData = {
+    credentialId: bufferToBase64Url(result.id),
+    clientDataJSON: bufferToBase64Url(result.clientDataJSON),
+    authenticatorData: bufferToBase64Url(result.authenticatorData),
+    signature: bufferToBase64Url(result.signature),
+    userHandle: bufferToBase64Url(result.userHandle),
+    extensions: {},
   };
 
-  // Set allowed credentials if provided
-  if (allowedCredentialIds.length > 0) {
-    const allowedCredentials = NSArrayFromObjects(
-      allowedCredentialIds.map((id) =>
-        createPlatformPublicKeyCredentialDescriptor(NSDataFromBuffer(id))
-      )
-    );
-    platformKeyRequest.setAllowedCredentials$(allowedCredentials);
+  // Add PRF extension results if available
+  if (result.prf && (result.prf[0] || result.prf[1])) {
+    data.extensions!.prf = {
+      results: {
+        first: bufferToBase64Url(result.prf[0]!),
+        second: result.prf[1] ? bufferToBase64Url(result.prf[1]) : undefined,
+      },
+    };
   }
 
-  // authController.delegate = self
-  const delegate = createAuthorizationControllerDelegate({
-    didCompleteWithAuthorization: (_, authorization) => {
-      // Cast to _ASAuthorization to access typed methods
-      const credential = authorization.credential() as unknown as
-        | _ASAuthorizationPlatformPublicKeyCredentialAssertion
-        | _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
-      // console.log("Authorization succeeded:", credential);
+  // Add largeBlob extension results if available
+  if (result.largeBlob || result.largeBlobWritten) {
+    data.extensions!.largeBlob = {
+      blob: result.largeBlob ? bufferToBase64Url(result.largeBlob) : undefined,
+      written:
+        result.largeBlobWritten !== null ? result.largeBlobWritten : undefined,
+    };
+  }
 
-      const id_data = credential.credentialID();
-      const id = bufferFromNSDataDirect(id_data);
-
-      let authenticatorAttachment: AuthenticatorAttachment = "platform";
-      if (
-        credential.attachment() ===
-        ASAuthorizationPublicKeyCredentialAttachment.ASAuthorizationPublicKeyCredentialAttachmentCrossPlatform
-      ) {
-        authenticatorAttachment = "cross-platform";
-      }
-
-      const prf = credential.prf();
-      const prfFirst = prf?.first ? prf.first() : null;
-      const prfSecond = prf?.second ? prf.second() : null;
-
-      let largeBlobBuffer: Buffer | null = null;
-      let largeBlobWritten: boolean | null = null;
-      if (credential.largeBlob()) {
-        const largeBlobData = credential.largeBlob().readData();
-        if (largeBlobData) {
-          largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
-        } else {
-          largeBlobWritten = credential.largeBlob().didWrite();
-        }
-      }
-
-      resolve({
-        id,
-        authenticatorAttachment,
-        clientDataJSON: clientDataBuffer, //bufferFromNSDataDirect(credential.rawClientDataJSON()),
-        authenticatorData: bufferFromNSDataDirect(
-          credential.rawAuthenticatorData()
-        ),
-        signature: bufferFromNSDataDirect(credential.signature()),
-        userHandle: bufferFromNSDataDirect(credential.userID()),
-        prf: [
-          prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
-          prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
-        ],
-        largeBlob: largeBlobBuffer,
-        largeBlobWritten,
-      });
-
-      finished(true);
-    },
-    didCompleteWithError: (_, error) => {
-      // Parse the NSError into a readable format
-      const parsedError = error as unknown as typeof _NSError.prototype;
-      const errorMessage = parsedError.localizedDescription().UTF8String();
-      // console.error("Authorization failed:", errorMessage);
-
-      reject(new Error(errorMessage));
-
-      finished(false);
-    },
-  });
-  authController.setDelegate$(delegate);
-
-  // authController.presentationContextProvider = self
-  const presentationContextProvider =
-    createPresentationContextProviderFromNativeWindowHandle(nativeWindowHandle);
-  authController.setPresentationContextProvider$(presentationContextProvider);
-
-  // authController.performRequests()
-  authController.performRequests();
-
-  return promise;
+  return { success: true, data };
 }
-
-export { getCredential };

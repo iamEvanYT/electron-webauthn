@@ -59,3 +59,29 @@ export function base64UrlToBuffer(b64url: string): Buffer {
   // decode
   return Buffer.from(b64, "base64");
 }
+
+/**
+ * Convert a BufferSource (ArrayBuffer | ArrayBufferView) to a Node/Bun Buffer.
+ * Zero-copy when possible (shares memory with the underlying ArrayBuffer).
+ */
+export function bufferSourceToBuffer(src: BufferSource): Buffer | null {
+  if (Buffer.isBuffer(src)) return src;
+
+  // ArrayBuffer / SharedArrayBuffer
+  if (
+    src instanceof ArrayBuffer ||
+    (typeof SharedArrayBuffer !== "undefined" &&
+      src instanceof SharedArrayBuffer)
+  ) {
+    return Buffer.from(src);
+  }
+
+  // ArrayBufferView: Uint8Array, DataView, etc.
+  // (DataView is also an ArrayBufferView)
+  if (ArrayBuffer.isView(src)) {
+    return Buffer.from(src.buffer, src.byteOffset, src.byteLength);
+  }
+
+  // throw new TypeError("Expected BufferSource (ArrayBuffer or ArrayBufferView)");
+  return null;
+}
