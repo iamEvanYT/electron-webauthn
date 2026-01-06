@@ -28,6 +28,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@oslojs/webauthn": "^1.0.0",
     "objc-js": "^0.0.15"
   },
   "trustedDependencies": [

@@ -237,6 +237,7 @@ function getCredentialInternal(
   // Generate our own client data instead of letting apple generate it
   //  This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
   const clientData = generateWebauthnClientData(
+    "webauthn.get",
     origin,
     challenge,
     additionalOptions.topFrameOrigin

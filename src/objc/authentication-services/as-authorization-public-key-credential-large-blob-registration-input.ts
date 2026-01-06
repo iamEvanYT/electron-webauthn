@@ -31,4 +31,3 @@ export function createASAuthorizationPublicKeyCredentialLargeBlobRegistrationInp
   ).alloc();
   return instance.initWithSupportRequirement$(supportRequirement);
 }
-

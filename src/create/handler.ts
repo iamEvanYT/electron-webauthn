@@ -1,12 +1,14 @@
 import { generateClientDataInfo } from "../helpers/client-data.js";
 import { generateWebauthnClientData } from "../helpers/client-data.js";
 import { PromiseWithResolvers } from "../helpers/index.js";
+import { encodeEC2PublicKeyToSPKI } from "../helpers/public-key.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import { createPRFInput, type PRFInput } from "../helpers/prf.js";
 import { createAuthorizationControllerDelegate } from "../objc/authentication-services/as-authorization-controller-delegate.js";
 import type { ASAuthorizationController } from "../objc/authentication-services/as-authorization-controller.js";
 import { createPlatformPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-platform-public-key-credential-provider.js";
 import { createASAuthorizationPublicKeyCredentialLargeBlobRegistrationInput } from "../objc/authentication-services/as-authorization-public-key-credential-large-blob-registration-input.js";
+import type { _ASAuthorizationPlatformPublicKeyCredentialRegistration } from "../objc/authentication-services/as-authorization-platform-public-key-credential-registration.js";
 import {
   ASAuthorizationPublicKeyCredentialPRFRegistrationInput,
   createASAuthorizationPublicKeyCredentialPRFRegistrationInput,
@@ -15,7 +17,10 @@ import { ASAuthorizationPublicKeyCredentialAttestationKind } from "../objc/authe
 import { ASAuthorizationPublicKeyCredentialLargeBlobSupportRequirement } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-support-requirement.js";
 import { ASAuthorizationPublicKeyCredentialUserVerificationPreference } from "../objc/authentication-services/enums/as-authorization-public-key-credential-user-verification-preference.js";
 import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
-import { NSDataFromBuffer } from "../objc/foundation/nsdata.js";
+import {
+  bufferFromNSDataDirect,
+  NSDataFromBuffer,
+} from "../objc/foundation/nsdata.js";
 import type { _NSError } from "../objc/foundation/nserror.js";
 import { NSStringFromString } from "../objc/foundation/nsstring.js";
 import {
@@ -24,8 +29,20 @@ import {
   WebauthnCreateController,
   type PublicKeyCredentialParams,
 } from "./authorization-controller.js";
+import { parseAttestationObject } from "@oslojs/webauthn";
+import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 
-export interface CreateCredentialResult {}
+export interface CreateCredentialResult {
+  credentialId: Buffer;
+  clientDataJSON: Buffer;
+  attestationObject: Buffer;
+  authenticatorData: Buffer;
+  attachment: AuthenticatorAttachment;
+  transports: string[];
+  isResidentKey: boolean;
+  publicKeyAlgorithm: number;
+  publicKey: Buffer;
+}
 
 type CredentialUserVerificationPreference =
   | "required"
@@ -126,16 +143,19 @@ function createCredential(
   // Attestation Preference
   let attestationPreference: ASAuthorizationPublicKeyCredentialAttestationKind =
     ASAuthorizationPublicKeyCredentialAttestationKind.None;
-  if (attestation === "direct") {
-    attestationPreference =
-      ASAuthorizationPublicKeyCredentialAttestationKind.Direct;
-  } else if (attestation === "enterprise") {
-    attestationPreference =
-      ASAuthorizationPublicKeyCredentialAttestationKind.Enterprise;
-  } else if (attestation === "indirect") {
-    attestationPreference =
-      ASAuthorizationPublicKeyCredentialAttestationKind.Indirect;
-  }
+
+  // Apple's 'Platform' Passkey Provider does not support attestation.
+  // If any of these attestation preferences are set, the request will fail with error 1000.
+  // if (attestation === "direct") {
+  //   attestationPreference =
+  //     ASAuthorizationPublicKeyCredentialAttestationKind.Direct;
+  // } else if (attestation === "enterprise") {
+  //   attestationPreference =
+  //     ASAuthorizationPublicKeyCredentialAttestationKind.Enterprise;
+  // } else if (attestation === "indirect") {
+  //   attestationPreference =
+  //     ASAuthorizationPublicKeyCredentialAttestationKind.Indirect;
+  // }
 
   platformKeyRequest.setAttestationPreference$(
     NSStringFromString(attestationPreference)
@@ -190,6 +210,7 @@ function createCredential(
   // Generate our own client data instead of letting apple generate it
   //  This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
   const clientData = generateWebauthnClientData(
+    "webauthn.create",
     origin,
     challenge,
     additionalOptions.topFrameOrigin
@@ -212,9 +233,50 @@ function createCredential(
   // authController.delegate = self
   const delegate = createAuthorizationControllerDelegate({
     didCompleteWithAuthorization: (_, authorization) => {
-      console.log("Authorization succeeded:", authorization);
+      // Cast to _ASAuthorization to access typed methods
+      const credential =
+        authorization.credential() as unknown as _ASAuthorizationPlatformPublicKeyCredentialRegistration;
+      console.log("Authorization succeeded:", credential);
 
-      resolve({});
+      const credentialIdBuffer = bufferFromNSDataDirect(
+        credential.credentialID()
+      );
+
+      const attestationObjectBuffer = bufferFromNSDataDirect(
+        credential.rawAttestationObject()
+      );
+      const attestation = parseAttestationObject(attestationObjectBuffer);
+
+      const publicKey = attestation.authenticatorData.credential.publicKey;
+
+      // Encode the public key to DER-encoded SubjectPublicKeyInfo (SPKI) format
+      const ec2Key = publicKey.ec2();
+      const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
+
+      const authenticatorData = Buffer.from(
+        JSON.stringify(attestation.authenticatorData)
+      );
+
+      let authenticatorAttachment: AuthenticatorAttachment = "platform";
+      if (
+        credential.attachment() ===
+        ASAuthorizationPublicKeyCredentialAttachment.ASAuthorizationPublicKeyCredentialAttachmentCrossPlatform
+      ) {
+        authenticatorAttachment = "cross-platform";
+      }
+
+      const data: CreateCredentialResult = {
+        credentialId: credentialIdBuffer,
+        clientDataJSON: clientDataBuffer,
+        attestationObject: attestationObjectBuffer,
+        authenticatorData,
+        attachment: authenticatorAttachment,
+        transports: ["hybrid", "internal"],
+        isResidentKey: true,
+        publicKeyAlgorithm: publicKey.algorithm(),
+        publicKey: publicKeySPKI,
+      };
+      resolve(data);
 
       finished(true);
     },

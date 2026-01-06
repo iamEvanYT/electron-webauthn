@@ -14,13 +14,14 @@ interface WebauthnClientData {
 // This is because apple's client data lack the `crossOrigin` field, which is required by a lot of sites.
 // Based on the Chromium implementation: https://source.chromium.org/chromium/chromium/src/+/80d4f5e183f311fb6200fd608eef6568d99dc2f0:components/webauthn/core/browser/client_data_json.cc;l=79
 export function generateWebauthnClientData(
+  type: "webauthn.get" | "webauthn.create",
   origin: string,
   challenge: Buffer,
   topFrameOrigin?: string
 ) {
   const serializedOrigin = serializeOrigin(origin);
   const clientData: WebauthnClientData = {
-    type: "webauthn.get",
+    type,
     challenge: bufferToBase64Url(challenge),
     origin: serializedOrigin,
     crossOrigin: false,
