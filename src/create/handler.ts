@@ -42,6 +42,10 @@ export interface CreateCredentialResult {
   isResidentKey: boolean;
   publicKeyAlgorithm: number;
   publicKey: Buffer;
+  isLargeBlobSupported: boolean | null;
+  isPRFSupported: boolean | null;
+  prfFirst: Buffer | null;
+  prfSecond: Buffer | null;
 }
 
 type CredentialUserVerificationPreference =
@@ -265,6 +269,33 @@ function createCredential(
         authenticatorAttachment = "cross-platform";
       }
 
+      let isLargeBlobSupported: boolean | null = null;
+      if (enabledExtensions.includes("largeBlob")) {
+        const largeBlobOutput = credential.largeBlob();
+        if (largeBlobOutput) {
+          isLargeBlobSupported = largeBlobOutput.isSupported();
+        }
+      }
+
+      let prfFirst: Buffer | null = null;
+      let prfSecond: Buffer | null = null;
+      let isPRFSupported: boolean | null = null;
+      if (enabledExtensions.includes("prf")) {
+        const prfOutput = credential.prf();
+        if (prfOutput) {
+          const prfFirstData = prfOutput.first();
+          const prfSecondData = prfOutput.second();
+          if (prfFirstData) {
+            prfFirst = bufferFromNSDataDirect(prfFirstData);
+          }
+          if (prfSecondData) {
+            prfSecond = bufferFromNSDataDirect(prfSecondData);
+          }
+
+          isPRFSupported = prfOutput.isSupported();
+        }
+      }
+
       const data: CreateCredentialResult = {
         credentialId: credentialIdBuffer,
         clientDataJSON: clientDataBuffer,
@@ -275,6 +306,10 @@ function createCredential(
         isResidentKey: true,
         publicKeyAlgorithm: publicKey.algorithm(),
         publicKey: publicKeySPKI,
+        isLargeBlobSupported,
+        isPRFSupported,
+        prfFirst,
+        prfSecond,
       };
       resolve(data);
 

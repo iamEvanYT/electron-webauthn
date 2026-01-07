@@ -1,6 +1,7 @@
 import { AuthenticationServices } from "./index.js";
 import type { NobjcObject } from "objc-js";
 import type { _ASAuthorizationPublicKeyCredentialLargeBlobRegistrationOutput } from "./as-authorization-public-key-credential-large-blob-registration-output.js";
+import type { _ASAuthorizationPublicKeyCredentialPRFRegistrationOutput } from "./as-authorization-public-key-credential-prf-registration-output.js";
 import type { _NSData } from "../foundation/nsdata.js";
 import type { ASAuthorizationPublicKeyCredentialAttachment } from "./enums/as-authorization-public-key-credential-attachment.js";
 
@@ -21,6 +22,13 @@ declare class _ASAuthorizationPlatformPublicKeyCredentialRegistration extends No
    * @returns The attachment type (platform or cross-platform)
    */
   attachment(): ASAuthorizationPublicKeyCredentialAttachment;
+
+  /**
+   * The output of a PRF operation during registration.
+   *
+   * @returns The PRF registration output, or nil if PRF was not used
+   */
+  prf(): _ASAuthorizationPublicKeyCredentialPRFRegistrationOutput;
 
   /**
    * The output of a large blob storage operation during registration.
