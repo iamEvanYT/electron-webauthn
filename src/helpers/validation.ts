@@ -6,6 +6,6 @@ export function isNumber(value: unknown): value is number {
   return value && typeof value === "number";
 }
 
-export function isObject(value: unknown): value is Record<string, unknown> {
+export function isObject(value: unknown) {
   return value && typeof value === "object";
 }

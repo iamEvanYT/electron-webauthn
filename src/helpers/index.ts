@@ -65,6 +65,7 @@ export function base64UrlToBuffer(b64url: string): Buffer {
  * Zero-copy when possible (shares memory with the underlying ArrayBuffer).
  */
 export function bufferSourceToBuffer(src: BufferSource): Buffer | null {
+  if (!src) return null;
   if (Buffer.isBuffer(src)) return src;
 
   // ArrayBuffer / SharedArrayBuffer

@@ -1,10 +1,11 @@
 import { NobjcClass, NobjcObject, getPointer } from "objc-js";
 import { NSDataFromBuffer, type _NSData } from "../objc/foundation/nsdata.js";
 import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
-import type { ExcludeCredential } from "./handler.js";
+import type { ExcludeCredential } from "./internal-handler.js";
 import { NSStringFromString } from "../objc/foundation/nsstring.js";
 import { createASCPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-c-public-key-credential-descriptor.js";
 import { NSNumberFromInteger } from "../objc/foundation/nsinteger.js";
+import { isNumber, isObject } from "../helpers/validation.js";
 
 const createControllerState = new Map<
   string,
