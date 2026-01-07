@@ -163,7 +163,13 @@ export async function createCredential(
   if (!isObject(rpInfo)) {
     return { success: false, error: "TypeError" };
   }
-  const rpId = rpInfo.id;
+  let rpId = rpInfo.id;
+  if (!rpId) {
+    try {
+      const url = new URL(additionalOptions.currentOrigin);
+      rpId = url.hostname;
+    } catch {}
+  }
   if (!isString(rpId)) {
     return { success: false, error: "TypeError" };
   }

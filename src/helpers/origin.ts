@@ -209,7 +209,7 @@ function originString(x: string | URL): string | null {
   // For blob:, URL.origin often already resolves to the embedded origin in modern runtimes,
   // but we handle blob in computeOrigin anyway.
   const o = computeOrigin(url);
-  if (o.type === "opaque") return "null";
+  if (o.type === "opaque") return null;
 
   // HTML ASCII serialization of a tuple origin:
   // scheme + "://" + host + (port is null ? "" : ":" + port)
