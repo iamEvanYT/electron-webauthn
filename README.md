@@ -4,9 +4,9 @@ Add native WebAuthn/FIDO2 support to Electron on macOS using its AuthenticationS
 
 ## Overview
 
-`electron-webauthn` is a TypeScript library that bridges Electron with the native macOS AuthenticationServices framework, enabling WebAuthn/FIDO2 authentication directly through native platform authenticators (Touch ID, Face ID, hardware security keys, etc.).
+`electron-webauthn` allows you to process WebAuthn requests on macOS Electron. Simply plug any `publicKeyOptions` from the standard `navigator.credentials.get()` or `navigator.credentials.create()` directly into this library's functions and they'll work with the native macOS authenticators.
 
-This package provides JavaScript bindings to Apple's AuthenticationServices framework, allowing you to perform WebAuthn assertions (authentication/signing with existing credentials) in your Electron applications using W3C WebAuthn-compliant APIs.
+This package provides JavaScript bindings to Apple's AuthenticationServices framework, allowing you to perform WebAuthn credential creation (registration) and assertions (authentication/signing) in your Electron applications using W3C WebAuthn-compliant APIs.
 
 ## Features
 
@@ -14,7 +14,9 @@ This package provides JavaScript bindings to Apple's AuthenticationServices fram
 - Support for platform authenticators (Touch ID, Face ID)
 - Support for cross-platform authenticators (external security keys)
 - TypeScript first with complete type definitions
-- W3C WebAuthn-compliant API
+- **W3C WebAuthn-compliant API** - drop in any standard `publicKeyOptions` and it just works
+- Credential creation (registration) with attestation
+- Credential authentication (assertions) with existing credentials
 - Seamless integration with Electron's native window system
 - PRF (Pseudo-Random Function) extension support
 - Large Blob extension support for reading/writing credential-specific data
@@ -22,6 +24,7 @@ This package provides JavaScript bindings to Apple's AuthenticationServices fram
 - Proper origin validation with public suffix list support
 - Cross-origin iframe support with `topFrameOrigin`
 - Per-credential PRF evaluation with `evalByCredential`
+- Resident key (discoverable credential) support
 
 ## Installation
 
@@ -41,17 +44,75 @@ yarn add electron-webauthn
 
 ## Quick Start
 
+> **💡 Drop-in Compatibility:** Simply plug any `publicKeyOptions` from the standard `navigator.credentials.create()` or `navigator.credentials.get()` APIs directly into these functions. They follow the W3C WebAuthn specification exactly.
+
+### Creating a Credential (Registration)
+
+```typescript
+import { createCredential } from "electron-webauthn";
+import { BrowserWindow } from "electron";
+
+// In your Electron main process or preload script
+async function register(window: BrowserWindow, challenge: ArrayBuffer) {
+  // Get the native window handle from your BrowserWindow
+  const nativeWindowHandle = window.getNativeWindowHandle();
+
+  // Call createCredential with W3C WebAuthn-compliant options
+  // You can plug any publicKeyOptions from navigator.credentials.create() here
+  const result = await createCredential(
+    {
+      challenge: challenge,
+      rp: {
+        name: "Example App",
+        id: "example.com",
+      },
+      user: {
+        id: new Uint8Array(16), // Random user ID
+        name: "user@example.com",
+        displayName: "User Name",
+      },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 }, // ES256
+        { type: "public-key", alg: -257 }, // RS256
+      ],
+      timeout: 60000, // Optional: 60 seconds
+      attestation: "none", // Optional: "none" | "indirect" | "direct"
+      authenticatorSelection: {
+        userVerification: "preferred", // Optional: "preferred" | "required" | "discouraged"
+        residentKey: "preferred", // Optional: "discouraged" | "preferred" | "required"
+      },
+    },
+    {
+      currentOrigin: "https://example.com",
+      topFrameOrigin: "https://example.com",
+      nativeWindowHandle: nativeWindowHandle,
+    }
+  );
+
+  if (result.success) {
+    console.log("Registration successful!");
+    console.log("Credential ID:", result.data.credentialId);
+    console.log("Public Key:", result.data.publicKey);
+    // Result contains base64url-encoded strings ready to send to server
+  } else {
+    console.error("Registration failed:", result.error);
+  }
+}
+```
+
+### Authenticating with a Credential
+
 ```typescript
 import { getCredential } from "electron-webauthn";
-import { getPointer } from "objc-js";
 import { BrowserWindow } from "electron";
 
 // In your Electron main process or preload script
 async function authenticate(window: BrowserWindow, challenge: ArrayBuffer) {
   // Get the native window handle from your BrowserWindow
-  const nativeWindowHandle = getPointer(window.getNativeWindowHandle());
+  const nativeWindowHandle = window.getNativeWindowHandle();
 
   // Call getCredential with W3C WebAuthn-compliant options
+  // You can plug any publicKeyOptions from navigator.credentials.get() here
   const result = await getCredential(
     {
       challenge: challenge,
@@ -59,17 +120,6 @@ async function authenticate(window: BrowserWindow, challenge: ArrayBuffer) {
       timeout: 60000, // Optional: 60 seconds
       userVerification: "preferred", // Optional: "preferred" | "required" | "discouraged"
       allowCredentials: [], // Optional: restrict to specific credentials
-      extensions: {
-        // Optional extensions
-        prf: {
-          eval: {
-            first: new Uint8Array(32), // 32 bytes
-          },
-        },
-        largeBlob: {
-          read: true,
-        },
-      },
     },
     {
       currentOrigin: "https://example.com",
@@ -91,55 +141,88 @@ async function authenticate(window: BrowserWindow, challenge: ArrayBuffer) {
 
 ## API Reference
 
+### `createCredential(publicKeyOptions, additionalOptions)`
+
+Creates and registers a new WebAuthn credential using available platform and cross-platform authenticators.
+
+**Note:** You can plug any `publicKeyOptions` from the standard `navigator.credentials.create({ publicKey: ... })` directly into this function.
+
+#### Parameters
+
+##### `publicKeyOptions: PublicKeyCredentialCreationOptions`
+
+Standard W3C WebAuthn credential creation options. See the [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredentialCreationOptions) for more details.
+
+##### `additionalOptions: WebauthnCreateRequestOptions`
+
+Additional options specific to the Electron environment:
+
+- **`currentOrigin: string`** (required) - The origin of the requesting document (e.g., "https://example.com")
+- **`topFrameOrigin: string | undefined`** - The origin of the top frame (for iframe support). Set to `currentOrigin` if not in an iframe
+- **`nativeWindowHandle: Buffer`** (required) - Native window handle from `BrowserWindow.getNativeWindowHandle()`, or a pointer to a NSView object
+- **`isPublicSuffix?: (domain: string) => boolean`** - Optional function to check if a domain is a public suffix (e.g., "com", "co.uk"). Strongly recommended for security
+
+#### Returns
+
+`Promise<CreateCredentialResult>` - Resolves with the registration result (that you can transform into a `PublicKeyCredential` object) or error
+
+#### Result Types
+
+```typescript
+type CreateCredentialResult =
+  | CreateCredentialSuccessResult
+  | CreateCredentialErrorResult;
+
+interface CreateCredentialSuccessResult {
+  success: true;
+  data: {
+    credentialId: string; // Base64url-encoded credential ID
+    clientDataJSON: string; // Base64url-encoded client data
+    attestationObject: string; // Base64url-encoded attestation object
+    authData: string; // Base64url-encoded authenticator data
+    publicKey: string; // Base64url-encoded public key (COSE format)
+    publicKeyAlgorithm: number; // COSE algorithm identifier (e.g., -7 for ES256)
+    transports: string[]; // Available transports (e.g., ["internal", "usb"])
+    extensions: {
+      credProps?: {
+        rk: boolean; // True if credential is a resident key
+      };
+      prf?: {
+        enabled?: boolean; // True if PRF is supported
+        results?: {
+          first?: string; // Base64url-encoded PRF output
+          second?: string; // Base64url-encoded PRF output (if provided)
+        };
+      };
+      largeBlob?: {
+        supported?: boolean; // True if large blob is supported
+      };
+    };
+  };
+}
+
+interface CreateCredentialErrorResult {
+  success: false;
+  error:
+    | "TypeError"
+    | "AbortError"
+    | "NotAllowedError"
+    | "SecurityError"
+    | "InvalidStateError";
+}
+```
+
 ### `getCredential(publicKeyOptions, additionalOptions)`
 
-Performs a WebAuthn assertion (authentication) using available platform and cross-platform authenticators. This function follows the W3C WebAuthn specification.
+Performs a WebAuthn assertion (authentication) using available platform and cross-platform authenticators.
+
+**Note:** You can plug any `publicKeyOptions` from the standard `navigator.credentials.get({ publicKey: ... })` directly into this function.
 
 #### Parameters
 
 ##### `publicKeyOptions: PublicKeyCredentialRequestOptions`
 
-You can plug the `publicKeyOptions` from `navigator.credentials.get()` directly onto this function.
-
-Standard W3C WebAuthn credential request options:
-
-- **`challenge: BufferSource`** (required) - The challenge from your server (32+ bytes recommended)
-- **`rpId: string`** (required) - The Relying Party ID (typically your domain, e.g., "example.com")
-- **`timeout?: number`** - Timeout in milliseconds (default: 10 minutes, max: 1 hour)
-- **`userVerification?: string`** - User verification preference:
-  - `"preferred"` - User verification is preferred but not required (default)
-  - `"required"` - User verification is required (e.g., biometric or PIN)
-  - `"discouraged"` - User verification should be discouraged
-- **`allowCredentials?: PublicKeyCredentialDescriptor[]`** - Optional array to restrict allowed credentials:
-  ```typescript
-  {
-    type: "public-key",
-    id: BufferSource, // Credential ID from registration
-  }
-  ```
-- **`extensions?: AuthenticationExtensionsClientInputs`** - Optional WebAuthn extensions:
-  - **`prf`** - Pseudo-Random Function extension:
-    ```typescript
-    {
-      eval?: {
-        first: BufferSource,  // 32+ bytes
-        second?: BufferSource // 32+ bytes (optional)
-      },
-      evalByCredential?: {
-        [base64UrlCredentialId: string]: {
-          first: BufferSource,
-          second?: BufferSource
-        }
-      }
-    }
-    ```
-  - **`largeBlob`** - Large Blob extension:
-    ```typescript
-    {
-      read?: boolean,        // Read existing blob
-      write?: BufferSource   // Write new blob data
-    }
-    ```
+Standard W3C WebAuthn credential request options. See the [MDN documentation](https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredentialRequestOptions) for more details.
 
 ##### `additionalOptions: WebauthnGetRequestOptions`
 
@@ -147,12 +230,12 @@ Additional options specific to the Electron environment:
 
 - **`currentOrigin: string`** (required) - The origin of the requesting document (e.g., "https://example.com")
 - **`topFrameOrigin: string | undefined`** - The origin of the top frame (for iframe support). Set to `currentOrigin` if not in an iframe
-- **`nativeWindowHandle: Buffer`** (required) - Native window handle from `BrowserWindow.getNativeWindowHandle()` wrapped with `getPointer()` from `objc-js`
+- **`nativeWindowHandle: Buffer`** (required) - Native window handle from `BrowserWindow.getNativeWindowHandle()`, or a pointer to a NSView object
 - **`isPublicSuffix?: (domain: string) => boolean`** - Optional function to check if a domain is a public suffix (e.g., "com", "co.uk"). Strongly recommended for security. Use a library like `tldts` for implementation
 
 #### Returns
 
-`Promise<GetCredentialResult>` - Resolves with the assertion result or error
+`Promise<GetCredentialResult>` - Resolves with the assertion result (that you can transform into a `PublicKeyCredential` object) or error
 
 #### Result Types
 
@@ -202,11 +285,71 @@ This library implements the W3C WebAuthn standard using Apple's native Authentic
 
 ## Usage Examples
 
+### Basic Registration
+
+```typescript
+import { createCredential } from "electron-webauthn";
+import { app, BrowserWindow } from "electron";
+
+let mainWindow: BrowserWindow;
+
+app.on("ready", () => {
+  mainWindow = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: "./preload.js",
+    },
+  });
+  mainWindow.loadURL("https://myapp.com");
+});
+
+// In your preload script or main process
+export async function registerUser(
+  challenge: ArrayBuffer,
+  userId: ArrayBuffer,
+  userName: string,
+  userDisplayName: string
+) {
+  const nativeHandle = mainWindow.getNativeWindowHandle();
+
+  const result = await createCredential(
+    {
+      challenge: challenge,
+      rp: {
+        name: "My App",
+        id: "myapp.com",
+      },
+      user: {
+        id: userId,
+        name: userName,
+        displayName: userDisplayName,
+      },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 }, // ES256
+        { type: "public-key", alg: -257 }, // RS256
+      ],
+      authenticatorSelection: {
+        userVerification: "preferred",
+      },
+    },
+    {
+      currentOrigin: "https://myapp.com",
+      topFrameOrigin: "https://myapp.com",
+      nativeWindowHandle: nativeHandle,
+    }
+  );
+
+  return result;
+}
+```
+
 ### Basic Authentication
 
 ```typescript
 import { getCredential } from "electron-webauthn";
-import { getPointer } from "objc-js";
 import { app, BrowserWindow } from "electron";
 
 let mainWindow: BrowserWindow;
@@ -226,7 +369,7 @@ app.on("ready", () => {
 
 // In your preload script or main process
 export async function authenticateUser(challenge: ArrayBuffer) {
-  const nativeHandle = getPointer(mainWindow.getNativeWindowHandle());
+  const nativeHandle = mainWindow.getNativeWindowHandle();
 
   const result = await getCredential(
     {
@@ -284,7 +427,114 @@ const result = await getCredential(
 );
 ```
 
-### Using PRF Extension
+### Creating Resident Keys (Discoverable Credentials)
+
+```typescript
+// Create a discoverable credential that can be used without specifying allowCredentials
+const result = await createCredential(
+  {
+    challenge: challenge,
+    rp: { name: "My App", id: "myapp.com" },
+    user: {
+      id: userId,
+      name: userName,
+      displayName: userDisplayName,
+    },
+    pubKeyCredParams: [
+      { type: "public-key", alg: -7 },
+      { type: "public-key", alg: -257 },
+    ],
+    authenticatorSelection: {
+      residentKey: "required", // Require resident key
+      userVerification: "required", // Usually combined with resident keys
+    },
+  },
+  {
+    currentOrigin: "https://myapp.com",
+    topFrameOrigin: "https://myapp.com",
+    nativeWindowHandle: nativeHandle,
+  }
+);
+```
+
+### Preventing Duplicate Registrations
+
+```typescript
+// Prevent user from registering the same authenticator multiple times
+const result = await createCredential(
+  {
+    challenge: challenge,
+    rp: { name: "My App", id: "myapp.com" },
+    user: {
+      id: userId,
+      name: userName,
+      displayName: userDisplayName,
+    },
+    pubKeyCredParams: [
+      { type: "public-key", alg: -7 },
+      { type: "public-key", alg: -257 },
+    ],
+    excludeCredentials: [
+      // List of credentials already registered for this user
+      { type: "public-key", id: existingCredentialId1 },
+      { type: "public-key", id: existingCredentialId2 },
+    ],
+  },
+  {
+    currentOrigin: "https://myapp.com",
+    topFrameOrigin: "https://myapp.com",
+    nativeWindowHandle: nativeHandle,
+  }
+);
+
+// If user tries to use an excluded authenticator, you'll get:
+// { success: false, error: "InvalidStateError" }
+```
+
+### Creating Credentials with PRF Extension
+
+```typescript
+// Register a credential with PRF support and immediately evaluate it
+const prfSalt = crypto.getRandomValues(new Uint8Array(32));
+
+const result = await createCredential(
+  {
+    challenge: challenge,
+    rp: { name: "My App", id: "myapp.com" },
+    user: {
+      id: userId,
+      name: userName,
+      displayName: userDisplayName,
+    },
+    pubKeyCredParams: [
+      { type: "public-key", alg: -7 },
+      { type: "public-key", alg: -257 },
+    ],
+    extensions: {
+      prf: {
+        eval: {
+          first: prfSalt,
+        },
+      },
+    },
+  },
+  {
+    currentOrigin: "https://myapp.com",
+    topFrameOrigin: "https://myapp.com",
+    nativeWindowHandle: nativeHandle,
+  }
+);
+
+if (result.success && result.data.extensions?.prf?.results?.first) {
+  console.log(
+    "PRF is supported and evaluated:",
+    result.data.extensions.prf.results.first
+  );
+  // Use this PRF output as an encryption key
+}
+```
+
+### Using PRF Extension (Authentication)
 
 The PRF (Pseudo-Random Function) extension allows you to derive cryptographic secrets from credentials:
 
@@ -444,47 +694,13 @@ const result = await getCredential(
 );
 ```
 
-### Server-Side Verification
-
-After getting the assertion result, verify it on your server using any WebAuthn library:
-
-```typescript
-// Example with @simplewebauthn/server (Node.js)
-import { verifyAuthenticationResponse } from "@simplewebauthn/server";
-
-// The result.data object contains base64url-encoded values
-const verification = await verifyAuthenticationResponse({
-  response: {
-    id: result.data.credentialId,
-    rawId: result.data.credentialId,
-    response: {
-      clientDataJSON: result.data.clientDataJSON,
-      authenticatorData: result.data.authenticatorData,
-      signature: result.data.signature,
-      userHandle: result.data.userHandle,
-    },
-    type: "public-key",
-  },
-  expectedChallenge: "expected-challenge-from-session",
-  expectedOrigin: "https://myapp.com",
-  expectedRPID: "myapp.com",
-  authenticator: {
-    credentialID: savedCredentialId,
-    credentialPublicKey: savedPublicKey,
-    counter: savedCounter,
-  },
-});
-
-if (verification.verified) {
-  console.log("Authentication successful!");
-}
-```
-
 ## Error Handling
 
-The `getCredential` function returns a result object with a `success` field. Always check this field:
+Both `createCredential` and `getCredential` functions return a result object with a `success` field. Always check this field:
 
 ```typescript
+const result = await createCredential(publicKeyOptions, additionalOptions);
+// or
 const result = await getCredential(publicKeyOptions, additionalOptions);
 
 if (!result.success) {
@@ -494,13 +710,18 @@ if (!result.success) {
       console.error("Invalid parameters provided");
       break;
     case "NotAllowedError":
-      console.error("User cancelled or no credentials available");
+      console.error("User cancelled or operation not allowed");
       break;
     case "SecurityError":
       console.error("Origin or rpId validation failed");
       break;
     case "AbortError":
       console.error("Operation was aborted");
+      break;
+    case "InvalidStateError":
+      console.error(
+        "Authenticator is in invalid state (e.g., credential already registered)"
+      );
       break;
   }
   return;
@@ -512,25 +733,41 @@ console.log("Credential ID:", result.data.credentialId);
 
 ### Common Error Scenarios
 
-- **NotAllowedError**: User cancelled the prompt, no valid credentials available, or the authenticator failed
-- **SecurityError**: Origin doesn't match rpId, invalid origin format, or rpId is a public suffix
+#### For Both Registration and Authentication
+
 - **TypeError**: Invalid parameter types (missing required fields, wrong data types)
+- **NotAllowedError**: User cancelled the prompt or the authenticator failed
+- **SecurityError**: Origin doesn't match rpId, invalid origin format, or rpId is a public suffix
 - **AbortError**: Operation timeout or explicitly aborted
+
+#### Registration-Specific (`createCredential`)
+
+- **InvalidStateError**: The authenticator attempted to register a credential that matches one in the `excludeCredentials` list (prevents duplicate registrations)
+
+#### Authentication-Specific (`getCredential`)
+
+- **NotAllowedError**: No valid credentials available for the specified rpId
 
 ## Feature Support
 
 **Currently Supported:**
 
+- ✅ WebAuthn credential creation (registration/attestation)
 - ✅ WebAuthn assertions (authentication with existing credentials)
 - ✅ Cross-platform authenticators (external security keys like YubiKey)
 - ✅ Platform authenticators (Touch ID, Face ID)
+- ✅ Discoverable credentials (resident keys)
+- ✅ Attestation formats (none, indirect, direct)
+- ✅ Duplicate credential prevention with `excludeCredentials`
 - ✅ PRF (Pseudo-Random Function) extension
-  - ✅ Global evaluation (`eval`)
-  - ✅ Per-credential evaluation (`evalByCredential`)
+  - ✅ Global evaluation (`eval`) for both registration and authentication
+  - ✅ Per-credential evaluation (`evalByCredential`) for authentication
 - ✅ Large Blob extension
-  - ✅ Reading blobs
-  - ✅ Writing blobs
-- ✅ User verification preferences
+  - ✅ Support indication during registration
+  - ✅ Reading blobs during authentication
+  - ✅ Writing blobs during authentication
+- ✅ credProps extension (credential properties)
+- ✅ User verification preferences (required, preferred, discouraged)
 - ✅ Credential filtering with `allowCredentials`
 - ✅ Proper origin and rpId validation
 - ✅ Cross-origin iframe support
@@ -538,10 +775,8 @@ console.log("Credential ID:", result.data.credentialId);
 
 **Not Yet Supported:**
 
-- ❌ Credential registration (attestation) - coming soon
-- ❌ Discoverable credentials (resident keys)
-- ❌ Conditional UI
-- ❌ Other WebAuthn extensions (credProtect, minPinLength, etc.)
+- ❌ Conditional UI (autofill/conditional mediation)
+- ❌ Other WebAuthn extensions (credProtect, minPinLength, hmac-secret, etc.)
 
 ## Best Practices
 
@@ -568,9 +803,17 @@ This library exports all necessary TypeScript types. Import them for type safety
 
 ```typescript
 import type {
+  // Registration types
+  CreateCredentialResult,
+  CreateCredentialSuccessData,
+  PublicKeyCredentialCreationOptions,
+
+  // Authentication types
   GetCredentialResult,
   GetCredentialSuccessData,
   PublicKeyCredentialRequestOptions,
+
+  // Shared types
   AuthenticationExtensionsClientInputs,
   PRFInput,
 } from "electron-webauthn";
@@ -586,7 +829,8 @@ Enable detailed logging by checking the console output. The library logs warning
 
 ## Known Limitations
 
-- **PRF and Large Blob**: Only supported on platform authenticators (Touch ID/Face ID), not security keys on macOS
+- **PRF and Large Blob extensions**: Only supported on platform authenticators (Touch ID/Face ID), not security keys on macOS
+- **Attestation formats**: macOS typically returns "none" attestation even when "direct" or "indirect" is requested, unless the authenticator specifically supports it
 
 ## License
 
