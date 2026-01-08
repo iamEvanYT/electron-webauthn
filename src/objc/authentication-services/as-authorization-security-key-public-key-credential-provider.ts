@@ -1,3 +1,5 @@
+import type { _NSData } from "../foundation/nsdata.js";
+import type { _NSString } from "../foundation/nsstring.js";
 import { AuthenticationServices } from "./index.js";
 import type { NobjcObject } from "objc-js";
 
@@ -12,10 +14,11 @@ declare class _ASAuthorizationSecurityKeyPublicKeyCredentialProvider extends Nob
   ): _ASAuthorizationSecurityKeyPublicKeyCredentialProvider;
 
   // Create credential registration request
-  createCredentialRegistrationRequestWithChallenge$name$userID$(
-    challenge: NobjcObject,
-    name: NobjcObject,
-    userID: NobjcObject
+  createCredentialRegistrationRequestWithChallenge$displayName$name$userID$(
+    challenge: _NSData,
+    displayName: _NSString,
+    name: _NSString,
+    userID: _NSData
   ): NobjcObject;
 
   /**

@@ -18,7 +18,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "tsc && rm -rf dist/test",
+    "build": "rm -rf dist && tsc && rm -rf dist/test",
     "test": "bun run src/test/index.ts"
   },
   "devDependencies": {

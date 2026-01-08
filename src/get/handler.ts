@@ -219,6 +219,7 @@ export async function getCredential(
     challenge,
     nativeWindowHandle,
     currentOrigin,
+    timeout,
     enabledExtensions,
     allowedCredentialsArray,
     userVerification,

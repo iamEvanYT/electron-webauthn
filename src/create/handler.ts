@@ -247,6 +247,7 @@ export async function createCredential(
 
   let residentKeyRequired = false;
   let userVerificationPreference: UserVerificationPreference = "preferred";
+  let preferredAuthenticatorAttachment: AuthenticatorAttachment = "platform";
   if (publicKeyOptions.authenticatorSelection) {
     if (publicKeyOptions.authenticatorSelection.residentKey === "required") {
       residentKeyRequired = true;
@@ -262,6 +263,12 @@ export async function createCredential(
       userVerificationPreference = "discouraged";
     } else {
       userVerificationPreference = "preferred";
+    }
+
+    const attachment =
+      publicKeyOptions.authenticatorSelection.authenticatorAttachment;
+    if (attachment === "cross-platform") {
+      preferredAuthenticatorAttachment = "cross-platform";
     }
   }
 
@@ -283,11 +290,13 @@ export async function createCredential(
     userID,
     nativeWindowHandle,
     currentOrigin,
+    timeout,
     extensions,
     attestationPreference,
     supportedAlgorithmIdentifiers,
     excludeCredentials,
     residentKeyRequired,
+    preferredAuthenticatorAttachment,
     userVerificationPreference,
     {
       topFrameOrigin,

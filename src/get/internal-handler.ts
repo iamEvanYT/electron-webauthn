@@ -37,8 +37,8 @@ import {
   generateWebauthnClientData,
 } from "../helpers/client-data.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
+import type { AuthenticatorAttachment } from "../helpers/types.js";
 
-type AuthenticatorAttachment = "platform" | "cross-platform";
 export type UserVerificationPreference =
   | "preferred"
   | "required"
@@ -174,6 +174,7 @@ function getCredentialInternal(
   challenge: Buffer,
   nativeWindowHandle: Buffer,
   origin: string,
+  timeout: number,
   enabledExtensions: CredentialAssertionExtensions[] = [],
   allowedCredentialIds: Buffer[],
   userVerificationPreference?: UserVerificationPreference,
@@ -248,8 +249,16 @@ function getCredentialInternal(
 
   setClientDataHash(authController, clientDataHash);
 
+  let isFinished = false;
+  let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    isFinished = true;
     removeClientDataHash(authController);
+
+    if (timeoutHandlerId) {
+      clearTimeout(timeoutHandlerId);
+      timeoutHandlerId = null;
+    }
   };
 
   // Set allowed credentials if provided
@@ -336,6 +345,12 @@ function getCredentialInternal(
 
   // authController.performRequests()
   authController.performRequests();
+
+  // Cancelling auth controller on timeout
+  timeoutHandlerId = setTimeout(() => {
+    if (isFinished) return;
+    authController.cancel();
+  }, timeout);
 
   return promise;
 }

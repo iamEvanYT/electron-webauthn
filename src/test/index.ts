@@ -11,6 +11,7 @@ const result = getCredentialInternal(
   Buffer.from("challenge"),
   nsViewPointer,
   "https://example.com",
+  10 * 1000,
   [],
   []
 );

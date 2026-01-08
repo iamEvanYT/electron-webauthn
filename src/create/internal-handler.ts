@@ -31,6 +31,8 @@ import {
 } from "./authorization-controller.js";
 import { parseAttestationObject } from "@oslojs/webauthn";
 import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
+import type { NobjcObject } from "objc-js";
+import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
 
 export interface CreateCredentialResult {
   credentialId: Buffer;
@@ -80,44 +82,13 @@ export interface ExcludeCredential {
   transports?: string[];
 }
 
-function createCredentialInternal(
-  rpid: string,
-  challenge: Buffer,
-  username: string,
-  userID: Buffer,
-  nativeWindowHandle: Buffer,
-  origin: string,
+function setupPublicKeyCredentialRegistrationRequest(
+  type: "platform" | "security-key",
+  keyRequest: NobjcObject,
   enabledExtensions: CredentialCreationExtensions[],
-  attestation: CredentialAttestationPreference = "none",
-  supportedAlgorithmIdentifiers: PublicKeyCredentialParams[] = [],
-  excludeCredentials: ExcludeCredential[],
-  residentKeyRequired: boolean = false,
-  userVerification: CredentialUserVerificationPreference = "preferred",
-  additionalOptions: CreateCredentialAdditionalOptions = {}
-): Promise<CreateCredentialResult> {
-  const { promise, resolve, reject } =
-    PromiseWithResolvers<CreateCredentialResult>();
-
-  // Create NS objects
-  const NS_rpID = NSStringFromString(rpid);
-
-  // let challenge: Data // Obtain this from the server.
-  const NS_challenge = NSDataFromBuffer(challenge);
-
-  const NS_username = NSStringFromString(username);
-  const NS_userID = NSDataFromBuffer(userID);
-
-  // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
-  const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
-
-  // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
-  const platformKeyRequest =
-    platformProvider.createCredentialRegistrationRequestWithChallenge$name$userID$(
-      NS_challenge,
-      NS_username,
-      NS_userID
-    );
-
+  userVerification: CredentialUserVerificationPreference,
+  additionalOptions: CreateCredentialAdditionalOptions
+) {
   // Large Blob Support
   if (enabledExtensions.includes("largeBlob")) {
     let supportMode:
@@ -142,7 +113,7 @@ function createCredentialInternal(
         createASAuthorizationPublicKeyCredentialLargeBlobRegistrationInput(
           supportMode
         );
-      platformKeyRequest.setLargeBlob$(largeBlobInput);
+      keyRequest.setLargeBlob$(largeBlobInput);
     }
   }
 
@@ -163,7 +134,7 @@ function createCredentialInternal(
   //     ASAuthorizationPublicKeyCredentialAttestationKind.Indirect;
   // }
 
-  platformKeyRequest.setAttestationPreference$(
+  keyRequest.setAttestationPreference$(
     NSStringFromString(attestationPreference)
   );
 
@@ -178,7 +149,7 @@ function createCredentialInternal(
       ASAuthorizationPublicKeyCredentialUserVerificationPreference.Discouraged;
   }
 
-  platformKeyRequest.setUserVerificationPreference$(
+  keyRequest.setUserVerificationPreference$(
     NSStringFromString(userVerificationPreference)
   );
 
@@ -187,7 +158,7 @@ function createCredentialInternal(
     const userDisplayName = NSStringFromString(
       additionalOptions.userDisplayName
     );
-    platformKeyRequest.setDisplayName$(userDisplayName);
+    keyRequest.setDisplayName$(userDisplayName);
   }
 
   // PRF extension
@@ -198,16 +169,93 @@ function createCredentialInternal(
         createASAuthorizationPublicKeyCredentialPRFRegistrationInput(
           inputValues
         );
-      platformKeyRequest.setPrf$(prfInput);
+      keyRequest.setPrf$(prfInput);
     } else {
-      platformKeyRequest.setPrf$(
+      keyRequest.setPrf$(
         ASAuthorizationPublicKeyCredentialPRFRegistrationInput.checkForSupport()
       );
     }
   }
+}
+
+function createCredentialInternal(
+  rpid: string,
+  challenge: Buffer,
+  username: string,
+  userID: Buffer,
+  nativeWindowHandle: Buffer,
+  origin: string,
+  timeout: number,
+  enabledExtensions: CredentialCreationExtensions[],
+  attestation: CredentialAttestationPreference = "none",
+  supportedAlgorithmIdentifiers: PublicKeyCredentialParams[] = [],
+  excludeCredentials: ExcludeCredential[],
+  residentKeyRequired: boolean = false,
+  preferredAuthenticatorAttachment: AuthenticatorAttachment = "platform",
+  userVerification: CredentialUserVerificationPreference = "preferred",
+  additionalOptions: CreateCredentialAdditionalOptions = {}
+): Promise<CreateCredentialResult> {
+  const { promise, resolve, reject } =
+    PromiseWithResolvers<CreateCredentialResult>();
+
+  // Create NS objects
+  const NS_rpID = NSStringFromString(rpid);
+
+  // let challenge: Data // Obtain this from the server.
+  const NS_challenge = NSDataFromBuffer(challenge);
+  const NS_username = NSStringFromString(username);
+  const NS_userID = NSDataFromBuffer(userID);
+
+  const requestArrayInput: NobjcObject[] = [];
+
+  if (preferredAuthenticatorAttachment === "platform") {
+    // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
+    const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
+
+    // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
+    const platformKeyRequest =
+      platformProvider.createCredentialRegistrationRequestWithChallenge$name$userID$(
+        NS_challenge,
+        NS_username,
+        NS_userID
+      );
+
+    setupPublicKeyCredentialRegistrationRequest(
+      "platform",
+      platformKeyRequest,
+      enabledExtensions,
+      userVerification,
+      additionalOptions
+    );
+
+    requestArrayInput.push(platformKeyRequest);
+  } else {
+    // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
+    const securityKeyProvider =
+      createSecurityKeyPublicKeyCredentialProvider(NS_rpID);
+
+    // let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
+    const securityKeyRequest =
+      securityKeyProvider.createCredentialRegistrationRequestWithChallenge$displayName$name$userID$(
+        NS_challenge,
+        NSStringFromString(additionalOptions.userDisplayName || username),
+        NS_username,
+        NS_userID
+      );
+
+    setupPublicKeyCredentialRegistrationRequest(
+      "security-key",
+      securityKeyRequest,
+      enabledExtensions,
+      userVerification,
+      additionalOptions
+    );
+
+    requestArrayInput.push(securityKeyRequest);
+  }
 
   // let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
-  const requestsArray = NSArrayFromObjects([platformKeyRequest]);
+  const requestsArray = NSArrayFromObjects(requestArrayInput);
   const authController: typeof ASAuthorizationController.prototype =
     WebauthnCreateController.alloc().initWithAuthorizationRequests$(
       requestsArray
@@ -232,8 +280,16 @@ function createCredentialInternal(
     excludeCredentials
   );
 
+  let isFinished = false;
+  let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    isFinished = true;
     removeControllerState(authController);
+
+    if (timeoutHandlerId) {
+      clearTimeout(timeoutHandlerId);
+      timeoutHandlerId = null;
+    }
   };
 
   // authController.delegate = self
@@ -321,7 +377,7 @@ function createCredentialInternal(
       // Parse the NSError into a readable format
       const parsedError = error as unknown as typeof _NSError.prototype;
       const errorMessage = parsedError.localizedDescription().UTF8String();
-      console.error("Authorization failed:", errorMessage);
+      // console.error("Authorization failed:", errorMessage);
 
       reject(new Error(errorMessage));
 
@@ -337,6 +393,12 @@ function createCredentialInternal(
 
   // authController.performRequests()
   authController.performRequests();
+
+  // Cancelling auth controller on timeout
+  timeoutHandlerId = setTimeout(() => {
+    if (isFinished) return;
+    authController.cancel();
+  }, timeout);
 
   // TODO
   // https://source.chromium.org/chromium/chromium/src/+/main:device/fido/mac/icloud_keychain_sys.mm;l=317;drc=7cac9cac0b4037c8b9b9d95d7e260c1bc348594c?q=userVerificationPreference&ss=chromium/chromium/src
