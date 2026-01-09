@@ -72,6 +72,7 @@ interface GetCredentialSuccessResult {
 interface GetCredentialErrorResult {
   success: false;
   error: "TypeError" | "AbortError" | "NotAllowedError" | "SecurityError";
+  errorObject?: Error;
 }
 export type GetCredentialResult =
   | GetCredentialSuccessResult
@@ -214,6 +215,7 @@ export async function getCredential(
   }
 
   // Call the (kinda-native?) handler
+  let errorResult: Error | null = null;
   const result = await getCredentialInternal(
     rpId,
     challenge,
@@ -230,19 +232,17 @@ export async function getCredential(
       prfByCredential,
     }
   ).catch((error: Error) => {
-    console.error("Error getting credential", error);
+    errorResult = error;
+    // console.error("Error getting credential", error);
     if (error.message.startsWith("The operation couldn’t be completed.")) {
       return "NotAllowedError";
     }
-    return "NotAllowedError";
+    return "NotAllowedError" as const;
   });
 
   // Handle the result
   if (typeof result === "string") {
-    if (result === "NotAllowedError") {
-      return { success: false, error: "NotAllowedError" };
-    }
-    return { success: false, error: "NotAllowedError" };
+    return { success: false, error: result, errorObject: errorResult };
   }
 
   const data: GetCredentialSuccessData = {

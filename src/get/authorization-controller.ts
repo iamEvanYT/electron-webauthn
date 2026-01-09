@@ -35,8 +35,11 @@ export const WebauthnGetController = NobjcClass.define({
         // Grab the assertion options, set the client data hash, and set a copy of the assertion options back on the context
         const selfPointer = getObjectPointerString(self);
         if (getControllerState.has(selfPointer)) {
-          const assertionOptions =
+          let assertionOptions =
             context.platformKeyCredentialAssertionOptions();
+          if (!assertionOptions) {
+            assertionOptions = context.securityKeyCredentialAssertionOptions();
+          }
 
           const clientDataHash = getControllerState.get(selfPointer);
           assertionOptions.setClientDataHash$(NSDataFromBuffer(clientDataHash));

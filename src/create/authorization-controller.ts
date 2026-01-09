@@ -5,7 +5,6 @@ import type { ExcludeCredential } from "./internal-handler.js";
 import { NSStringFromString } from "../objc/foundation/nsstring.js";
 import { createASCPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-c-public-key-credential-descriptor.js";
 import { NSNumberFromInteger } from "../objc/foundation/nsinteger.js";
-import { isNumber, isObject } from "../helpers/validation.js";
 
 const createControllerState = new Map<
   string,
@@ -60,8 +59,15 @@ export const WebauthnCreateController = NobjcClass.define({
         // Grab the registration options, set the client data hash, and set a copy of the registration options back on the context
         const selfPointer = getObjectPointerString(self);
         if (context && createControllerState.has(selfPointer)) {
-          const registrationOptions =
+          let isSecurityKey = false;
+
+          let registrationOptions =
             context.platformKeyCredentialCreationOptions();
+          if (!registrationOptions) {
+            registrationOptions =
+              context.securityKeyCredentialCreationOptions();
+            isSecurityKey = true;
+          }
 
           const [
             clientDataHash,
@@ -89,7 +95,12 @@ export const WebauthnCreateController = NobjcClass.define({
           }
 
           // Set resident key requirement
-          registrationOptions.setShouldRequireResidentKey$(residentKeyRequired);
+          // If this is enabled for security keys, users will not be able to scan QR code to register a new credential.
+          if (!isSecurityKey) {
+            registrationOptions.setShouldRequireResidentKey$(
+              residentKeyRequired
+            );
+          }
 
           // Set excluded credentials
           const excludeList: NobjcObject[] = [];

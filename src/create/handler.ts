@@ -6,6 +6,7 @@ import { isNumber, isObject, isString } from "../helpers/validation.js";
 import type { PublicKeyCredentialParams } from "./authorization-controller.js";
 import {
   createCredentialInternal,
+  type AuthenticatorAttachmentWithExtra,
   type CredentialCreationExtensions,
   type ExcludeCredential,
   type LargeBlobSupport,
@@ -86,6 +87,7 @@ interface CreateCredentialErrorResult {
     | "NotAllowedError"
     | "SecurityError"
     | "InvalidStateError";
+  errorObject?: Error;
 }
 export type CreateCredentialResult =
   | CreateCredentialSuccessResult
@@ -224,6 +226,18 @@ export async function createCredential(
     }
   }
 
+  // According to the W3C spec
+  if (supportedAlgorithmIdentifiers.length === 0) {
+    supportedAlgorithmIdentifiers.push({
+      type: "public-key",
+      algorithm: -7,
+    });
+    supportedAlgorithmIdentifiers.push({
+      type: "public-key",
+      algorithm: -257,
+    });
+  }
+
   const excludeCredentials: ExcludeCredential[] = [];
   if (
     publicKeyOptions.excludeCredentials &&
@@ -247,7 +261,8 @@ export async function createCredential(
 
   let residentKeyRequired = false;
   let userVerificationPreference: UserVerificationPreference = "preferred";
-  let preferredAuthenticatorAttachment: AuthenticatorAttachment = "platform";
+  let preferredAuthenticatorAttachment: AuthenticatorAttachmentWithExtra =
+    "all";
   if (publicKeyOptions.authenticatorSelection) {
     if (publicKeyOptions.authenticatorSelection.residentKey === "required") {
       residentKeyRequired = true;
@@ -269,6 +284,8 @@ export async function createCredential(
       publicKeyOptions.authenticatorSelection.authenticatorAttachment;
     if (attachment === "cross-platform") {
       preferredAuthenticatorAttachment = "cross-platform";
+    } else if (attachment === "platform") {
+      preferredAuthenticatorAttachment = "platform";
     }
   }
 
@@ -283,6 +300,7 @@ export async function createCredential(
   }
 
   // Call the (kinda-native?) handler
+  let errorResult: Error | null = null;
   const result = await createCredentialInternal(
     rpId,
     challenge,
@@ -304,8 +322,8 @@ export async function createCredential(
       prf,
     }
   ).catch((error: Error) => {
-    console.error("Error creating credential", error);
-    console.log("error.message", error.message);
+    errorResult = error;
+    // console.error("Error creating credential", error);
     if (
       error.message.includes(
         "(com.apple.AuthenticationServices.AuthorizationError error 1006.)"
@@ -321,7 +339,7 @@ export async function createCredential(
   });
 
   if (typeof result === "string") {
-    return { success: false, error: result };
+    return { success: false, error: result, errorObject: errorResult };
   }
 
   const data: CreateCredentialSuccessData = {

@@ -33,6 +33,12 @@ import { parseAttestationObject } from "@oslojs/webauthn";
 import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 import type { NobjcObject } from "objc-js";
 import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
+import {
+  createASAuthorizationPublicKeyCredentialParameters,
+  type _ASAuthorizationPublicKeyCredentialParameters,
+} from "../objc/authentication-services/as-authorization-public-key-credential-parameters.js";
+
+export type AuthenticatorAttachmentWithExtra = AuthenticatorAttachment | "all";
 
 export interface CreateCredentialResult {
   credentialId: Buffer;
@@ -85,12 +91,14 @@ export interface ExcludeCredential {
 function setupPublicKeyCredentialRegistrationRequest(
   type: "platform" | "security-key",
   keyRequest: NobjcObject,
+  attestation: CredentialAttestationPreference,
   enabledExtensions: CredentialCreationExtensions[],
   userVerification: CredentialUserVerificationPreference,
+  pubKeyCredParams: PublicKeyCredentialParams[],
   additionalOptions: CreateCredentialAdditionalOptions
 ) {
   // Large Blob Support
-  if (enabledExtensions.includes("largeBlob")) {
+  if (type === "platform" && enabledExtensions.includes("largeBlob")) {
     let supportMode:
       | ASAuthorizationPublicKeyCredentialLargeBlobSupportRequirement
       | undefined;
@@ -122,17 +130,20 @@ function setupPublicKeyCredentialRegistrationRequest(
     ASAuthorizationPublicKeyCredentialAttestationKind.None;
 
   // Apple's 'Platform' Passkey Provider does not support attestation.
+  // Only 'Security Key' Passkey Provider supports attestation.
   // If any of these attestation preferences are set, the request will fail with error 1000.
-  // if (attestation === "direct") {
-  //   attestationPreference =
-  //     ASAuthorizationPublicKeyCredentialAttestationKind.Direct;
-  // } else if (attestation === "enterprise") {
-  //   attestationPreference =
-  //     ASAuthorizationPublicKeyCredentialAttestationKind.Enterprise;
-  // } else if (attestation === "indirect") {
-  //   attestationPreference =
-  //     ASAuthorizationPublicKeyCredentialAttestationKind.Indirect;
-  // }
+  if (type === "security-key") {
+    if (attestation === "direct") {
+      attestationPreference =
+        ASAuthorizationPublicKeyCredentialAttestationKind.Direct;
+    } else if (attestation === "enterprise") {
+      attestationPreference =
+        ASAuthorizationPublicKeyCredentialAttestationKind.Enterprise;
+    } else if (attestation === "indirect") {
+      attestationPreference =
+        ASAuthorizationPublicKeyCredentialAttestationKind.Indirect;
+    }
+  }
 
   keyRequest.setAttestationPreference$(
     NSStringFromString(attestationPreference)
@@ -154,15 +165,30 @@ function setupPublicKeyCredentialRegistrationRequest(
   );
 
   // User Display Name if provided
-  if (additionalOptions.userDisplayName) {
+  if (type === "platform" && additionalOptions.userDisplayName) {
     const userDisplayName = NSStringFromString(
       additionalOptions.userDisplayName
     );
     keyRequest.setDisplayName$(userDisplayName);
   }
 
+  // Credential Parameters
+  if (type === "security-key") {
+    const credentialParameters: _ASAuthorizationPublicKeyCredentialParameters[] =
+      [];
+    for (const param of pubKeyCredParams) {
+      if (param.type === "public-key") {
+        credentialParameters.push(
+          createASAuthorizationPublicKeyCredentialParameters(param.algorithm)
+        );
+      }
+    }
+    const nsCredentialParameters = NSArrayFromObjects(credentialParameters);
+    keyRequest.setCredentialParameters$(nsCredentialParameters);
+  }
+
   // PRF extension
-  if (enabledExtensions.includes("prf")) {
+  if (type === "platform" && enabledExtensions.includes("prf")) {
     if (additionalOptions.prf) {
       const inputValues = createPRFInput(additionalOptions.prf);
       const prfInput =
@@ -191,7 +217,7 @@ function createCredentialInternal(
   supportedAlgorithmIdentifiers: PublicKeyCredentialParams[] = [],
   excludeCredentials: ExcludeCredential[],
   residentKeyRequired: boolean = false,
-  preferredAuthenticatorAttachment: AuthenticatorAttachment = "platform",
+  preferredAuthenticatorAttachment: AuthenticatorAttachmentWithExtra = "all",
   userVerification: CredentialUserVerificationPreference = "preferred",
   additionalOptions: CreateCredentialAdditionalOptions = {}
 ): Promise<CreateCredentialResult> {
@@ -208,7 +234,10 @@ function createCredentialInternal(
 
   const requestArrayInput: NobjcObject[] = [];
 
-  if (preferredAuthenticatorAttachment === "platform") {
+  if (
+    preferredAuthenticatorAttachment === "all" ||
+    preferredAuthenticatorAttachment === "platform"
+  ) {
     // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
     const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
 
@@ -223,13 +252,20 @@ function createCredentialInternal(
     setupPublicKeyCredentialRegistrationRequest(
       "platform",
       platformKeyRequest,
+      attestation,
       enabledExtensions,
       userVerification,
+      supportedAlgorithmIdentifiers,
       additionalOptions
     );
 
     requestArrayInput.push(platformKeyRequest);
-  } else {
+  }
+
+  if (
+    preferredAuthenticatorAttachment === "all" ||
+    preferredAuthenticatorAttachment === "cross-platform"
+  ) {
     // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
     const securityKeyProvider =
       createSecurityKeyPublicKeyCredentialProvider(NS_rpID);
@@ -246,8 +282,10 @@ function createCredentialInternal(
     setupPublicKeyCredentialRegistrationRequest(
       "security-key",
       securityKeyRequest,
+      attestation,
       enabledExtensions,
       userVerification,
+      supportedAlgorithmIdentifiers,
       additionalOptions
     );
 
@@ -399,9 +437,6 @@ function createCredentialInternal(
     if (isFinished) return;
     authController.cancel();
   }, timeout);
-
-  // TODO
-  // https://source.chromium.org/chromium/chromium/src/+/main:device/fido/mac/icloud_keychain_sys.mm;l=317;drc=7cac9cac0b4037c8b9b9d95d7e260c1bc348594c?q=userVerificationPreference&ss=chromium/chromium/src
 
   return promise;
 }
