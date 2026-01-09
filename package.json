@@ -2,6 +2,7 @@
   "name": "electron-webauthn",
   "version": "0.0.17",
   "repository": "https://github.com/iamEvanYT/electron-webauthn.git",
+  "homepage": "https://github.com/iamEvanYT/electron-webauthn#readme",
   "description": "Add support for WebAuthn for Electron.",
   "main": "dist/index.js",
   "module": "dist/index.js",
