@@ -7,6 +7,12 @@ import {
   type CredentialAssertionExtensions,
 } from "./internal-handler.js";
 
+export type GetCredentialErrorCodes =
+  | "TypeError"
+  | "AbortError"
+  | "NotAllowedError"
+  | "SecurityError";
+
 /**
  * The result of getting a credential.
  */
@@ -71,7 +77,7 @@ interface GetCredentialSuccessResult {
 }
 interface GetCredentialErrorResult {
   success: false;
-  error: "TypeError" | "AbortError" | "NotAllowedError" | "SecurityError";
+  error: GetCredentialErrorCodes;
   errorObject?: Error;
 }
 export type GetCredentialResult =

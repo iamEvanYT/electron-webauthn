@@ -12,6 +12,13 @@ import {
   type LargeBlobSupport,
 } from "./internal-handler.js";
 
+export type CreateCredentialErrorCodes =
+  | "TypeError"
+  | "AbortError"
+  | "NotAllowedError"
+  | "SecurityError"
+  | "InvalidStateError";
+
 /**
  * The result of getting a credential.
  */
@@ -81,12 +88,7 @@ interface CreateCredentialSuccessResult {
 }
 interface CreateCredentialErrorResult {
   success: false;
-  error:
-    | "TypeError"
-    | "AbortError"
-    | "NotAllowedError"
-    | "SecurityError"
-    | "InvalidStateError";
+  error: CreateCredentialErrorCodes;
   errorObject?: Error;
 }
 export type CreateCredentialResult =
