@@ -8,6 +8,9 @@ Add native WebAuthn/FIDO2 support to Electron on macOS using its AuthenticationS
 
 This package provides JavaScript bindings to Apple's AuthenticationServices framework, allowing you to perform WebAuthn credential creation (registration) and assertions (authentication/signing) in your Electron applications using W3C WebAuthn-compliant APIs.
 
+> [!NOTE]
+> Although this library is called `electron-webauthn`, it can be used in Node.js and Bun projects as well, not just Electron.
+
 ## Features
 
 - Native WebAuthn support for Electron on macOS
@@ -55,6 +58,10 @@ yarn add electron-webauthn
 ## Quick Start
 
 See the [Quick Start Guide](./docs/quick-start.md) for detailed examples on credential creation and authentication.
+
+## Configure Entitlements and Provisioning
+
+See the [Entitlements and Provisioning Guide](./docs/entitlements-and-provisioning.md) for detailed instructions on how to configure entitlements and provisioning for your Electron application.
 
 ## API Reference
 
