@@ -12,7 +12,7 @@ const createControllerState = new Map<
 >();
 
 function getObjectPointerString(self: NobjcObject) {
-  return getPointer(self).toBase64();
+  return getPointer(self).toString("base64");
 }
 
 export interface PublicKeyCredentialParams {

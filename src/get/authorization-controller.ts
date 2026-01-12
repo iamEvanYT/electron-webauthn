@@ -4,7 +4,7 @@ import { NSDataFromBuffer, type _NSData } from "../objc/foundation/nsdata.js";
 const getControllerState = new Map<string, Buffer>();
 
 function getObjectPointerString(self: NobjcObject) {
-  return getPointer(self).toBase64();
+  return getPointer(self).toString("base64");
 }
 
 export function setClientDataHash(self: NobjcObject, clientDataHash: Buffer) {
