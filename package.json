@@ -1,6 +1,6 @@
 {
   "name": "electron-webauthn",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "repository": "https://github.com/iamEvanYT/electron-webauthn.git",
   "homepage": "https://github.com/iamEvanYT/electron-webauthn#readme",
   "description": "Add support for WebAuthn for Electron.",
@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@oslojs/webauthn": "^1.0.0",
-    "objc-js": "^1.0.2"
+    "objc-js": "^1.0.3"
   },
   "trustedDependencies": [
     "objc-js"
