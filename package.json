@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@oslojs/webauthn": "^1.0.0",
-    "objc-js": "^1.0.4"
+    "objc-js": "^1.1.0"
   },
   "trustedDependencies": [
     "objc-js"
