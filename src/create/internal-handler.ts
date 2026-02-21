@@ -173,7 +173,8 @@ function setupPublicKeyCredentialRegistrationRequest(
     const credentialParameters: _ASAuthorizationPublicKeyCredentialParameters[] =
       [];
     for (const param of pubKeyCredParams) {
-      if (param.type === "public-key") {
+      // Apple only supports ES256 (algorithm -7) for security keys currently
+      if (param.type === "public-key" && param.algorithm === -7) {
         const paramObj =
           ASAuthorizationPublicKeyCredentialParameters.alloc().initWithAlgorithm$(
             param.algorithm
