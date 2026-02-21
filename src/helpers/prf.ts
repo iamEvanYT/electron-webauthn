@@ -1,5 +1,5 @@
-import { createASAuthorizationPublicKeyCredentialPRFAssertionInputValues } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input-valuesas-authorization-public-key-credential-prf-assertion-input-values.js";
-import { NSDataFromBuffer } from "../objc/foundation/nsdata.js";
+import { ASAuthorizationPublicKeyCredentialPRFAssertionInputValues } from "objcjs-types/AuthenticationServices";
+import { NSDataFromBuffer } from "objcjs-types/nsdata";
 
 export interface PRFInput {
   first: Buffer;
@@ -7,7 +7,7 @@ export interface PRFInput {
 }
 
 export function createPRFInput(prf: PRFInput) {
-  return createASAuthorizationPublicKeyCredentialPRFAssertionInputValues(
+  return ASAuthorizationPublicKeyCredentialPRFAssertionInputValues.alloc().initWithSaltInput1$saltInput2$(
     NSDataFromBuffer(prf.first),
     prf.second ? NSDataFromBuffer(prf.second) : null
   );

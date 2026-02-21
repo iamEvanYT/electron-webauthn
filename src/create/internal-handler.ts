@@ -4,25 +4,6 @@ import { PromiseWithResolvers } from "../helpers/index.js";
 import { encodeEC2PublicKeyToSPKI } from "../helpers/public-key.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import { createPRFInput, type PRFInput } from "../helpers/prf.js";
-import { createAuthorizationControllerDelegate } from "../objc/authentication-services/as-authorization-controller-delegate.js";
-import type { ASAuthorizationController } from "../objc/authentication-services/as-authorization-controller.js";
-import { createPlatformPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-platform-public-key-credential-provider.js";
-import { createASAuthorizationPublicKeyCredentialLargeBlobRegistrationInput } from "../objc/authentication-services/as-authorization-public-key-credential-large-blob-registration-input.js";
-import type { _ASAuthorizationPlatformPublicKeyCredentialRegistration } from "../objc/authentication-services/as-authorization-platform-public-key-credential-registration.js";
-import {
-  ASAuthorizationPublicKeyCredentialPRFRegistrationInput,
-  createASAuthorizationPublicKeyCredentialPRFRegistrationInput,
-} from "../objc/authentication-services/as-authorization-public-key-credential-prf-registration-input.js";
-import { ASAuthorizationPublicKeyCredentialAttestationKind } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attestation-kind.js";
-import { ASAuthorizationPublicKeyCredentialLargeBlobSupportRequirement } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-support-requirement.js";
-import { ASAuthorizationPublicKeyCredentialUserVerificationPreference } from "../objc/authentication-services/enums/as-authorization-public-key-credential-user-verification-preference.js";
-import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
-import {
-  bufferFromNSDataDirect,
-  NSDataFromBuffer,
-} from "../objc/foundation/nsdata.js";
-import type { _NSError } from "../objc/foundation/nserror.js";
-import { NSStringFromString } from "../objc/foundation/nsstring.js";
 import {
   removeControllerState,
   setControllerState,
@@ -30,13 +11,26 @@ import {
   type PublicKeyCredentialParams,
 } from "./authorization-controller.js";
 import { parseAttestationObject } from "@oslojs/webauthn";
-import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 import type { NobjcObject } from "objc-js";
-import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
+import { NSArrayFromObjects, NSStringFromString } from "objcjs-types/helpers";
+import { bufferFromNSDataDirect, NSDataFromBuffer } from "objcjs-types/nsdata";
 import {
-  createASAuthorizationPublicKeyCredentialParameters,
+  ASAuthorizationPlatformPublicKeyCredentialProvider,
+  ASAuthorizationPlatformPublicKeyCredentialRegistration,
+  ASAuthorizationPublicKeyCredentialAttachment,
+  ASAuthorizationPublicKeyCredentialAttestationKind,
+  ASAuthorizationPublicKeyCredentialLargeBlobRegistrationInput,
+  ASAuthorizationPublicKeyCredentialLargeBlobSupportRequirement,
+  ASAuthorizationPublicKeyCredentialParameters,
+  ASAuthorizationPublicKeyCredentialPRFRegistrationInput,
+  ASAuthorizationPublicKeyCredentialUserVerificationPreference,
+  ASAuthorizationSecurityKeyPublicKeyCredentialProvider,
+  ASAuthorizationSecurityKeyPublicKeyCredentialRegistration,
+  type _ASAuthorizationPlatformPublicKeyCredentialRegistrationRequest,
   type _ASAuthorizationPublicKeyCredentialParameters,
-} from "../objc/authentication-services/as-authorization-public-key-credential-parameters.js";
+  type _ASAuthorizationSecurityKeyPublicKeyCredentialRegistrationRequest,
+} from "objcjs-types/AuthenticationServices";
+import { createDelegate } from "objcjs-types";
 
 export type AuthenticatorAttachmentWithExtra = AuthenticatorAttachment | "all";
 
@@ -90,7 +84,9 @@ export interface ExcludeCredential {
 
 function setupPublicKeyCredentialRegistrationRequest(
   type: "platform" | "security-key",
-  keyRequest: NobjcObject,
+  keyRequest:
+    | _ASAuthorizationPlatformPublicKeyCredentialRegistrationRequest
+    | _ASAuthorizationSecurityKeyPublicKeyCredentialRegistrationRequest,
   attestation: CredentialAttestationPreference,
   enabledExtensions: CredentialCreationExtensions[],
   userVerification: CredentialUserVerificationPreference,
@@ -118,7 +114,7 @@ function setupPublicKeyCredentialRegistrationRequest(
 
     if (supportMode) {
       const largeBlobInput =
-        createASAuthorizationPublicKeyCredentialLargeBlobRegistrationInput(
+        ASAuthorizationPublicKeyCredentialLargeBlobRegistrationInput.alloc().initWithSupportRequirement$(
           supportMode
         );
       keyRequest.setLargeBlob$(largeBlobInput);
@@ -178,9 +174,11 @@ function setupPublicKeyCredentialRegistrationRequest(
       [];
     for (const param of pubKeyCredParams) {
       if (param.type === "public-key") {
-        credentialParameters.push(
-          createASAuthorizationPublicKeyCredentialParameters(param.algorithm)
-        );
+        const paramObj =
+          ASAuthorizationPublicKeyCredentialParameters.alloc().initWithAlgorithm$(
+            param.algorithm
+          );
+        credentialParameters.push(paramObj);
       }
     }
     const nsCredentialParameters = NSArrayFromObjects(credentialParameters);
@@ -192,7 +190,7 @@ function setupPublicKeyCredentialRegistrationRequest(
     if (additionalOptions.prf) {
       const inputValues = createPRFInput(additionalOptions.prf);
       const prfInput =
-        createASAuthorizationPublicKeyCredentialPRFRegistrationInput(
+        ASAuthorizationPublicKeyCredentialPRFRegistrationInput.alloc().initWithInputValues$(
           inputValues
         );
       keyRequest.setPrf$(prfInput);
@@ -239,7 +237,10 @@ function createCredentialInternal(
     preferredAuthenticatorAttachment === "platform"
   ) {
     // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
-    const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
+    const platformProvider =
+      ASAuthorizationPlatformPublicKeyCredentialProvider.alloc().initWithRelyingPartyIdentifier$(
+        NS_rpID
+      );
 
     // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
     const platformKeyRequest =
@@ -268,7 +269,9 @@ function createCredentialInternal(
   ) {
     // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
     const securityKeyProvider =
-      createSecurityKeyPublicKeyCredentialProvider(NS_rpID);
+      ASAuthorizationSecurityKeyPublicKeyCredentialProvider.alloc().initWithRelyingPartyIdentifier$(
+        NS_rpID
+      );
 
     // let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
     const securityKeyRequest =
@@ -294,7 +297,7 @@ function createCredentialInternal(
 
   // let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
   const requestsArray = NSArrayFromObjects(requestArrayInput);
-  const authController: typeof ASAuthorizationController.prototype =
+  const authController =
     WebauthnCreateController.alloc().initWithAuthorizationRequests$(
       requestsArray
     );
@@ -331,12 +334,29 @@ function createCredentialInternal(
   };
 
   // authController.delegate = self
-  const delegate = createAuthorizationControllerDelegate({
-    didCompleteWithAuthorization: (_, authorization) => {
-      // Cast to _ASAuthorization to access typed methods
-      const credential =
-        authorization.credential() as unknown as _ASAuthorizationPlatformPublicKeyCredentialRegistration;
+  const delegate = createDelegate("ASAuthorizationControllerDelegate", {
+    authorizationController$didCompleteWithAuthorization$: (
+      _,
+      authorization
+    ) => {
+      const credential = authorization.credential();
       console.log("Authorization succeeded:", credential);
+
+      const isPlatform =
+        credential instanceof
+        ASAuthorizationPlatformPublicKeyCredentialRegistration;
+      const isSecurityKey =
+        credential instanceof
+        ASAuthorizationSecurityKeyPublicKeyCredentialRegistration;
+      if (!isPlatform && !isSecurityKey) {
+        reject(
+          new Error(
+            "Resulting credential is not a platform or security key credential"
+          )
+        );
+        finished(false);
+        return;
+      }
 
       const credentialIdBuffer = bufferFromNSDataDirect(
         credential.credentialID()
@@ -357,12 +377,13 @@ function createCredentialInternal(
         JSON.stringify(attestation.authenticatorData)
       );
 
-      let authenticatorAttachment: AuthenticatorAttachment = "platform";
+      let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
       if (
+        isPlatform &&
         credential.attachment() ===
-        ASAuthorizationPublicKeyCredentialAttachment.ASAuthorizationPublicKeyCredentialAttachmentCrossPlatform
+          ASAuthorizationPublicKeyCredentialAttachment.Platform
       ) {
-        authenticatorAttachment = "cross-platform";
+        authenticatorAttachment = "platform";
       }
 
       let isLargeBlobSupported: boolean | null = null;
@@ -411,14 +432,11 @@ function createCredentialInternal(
 
       finished(true);
     },
-    didCompleteWithError: (_, error) => {
-      // Parse the NSError into a readable format
-      const parsedError = error as unknown as typeof _NSError.prototype;
-      const errorMessage = parsedError.localizedDescription().UTF8String();
+    authorizationController$didCompleteWithError$: (_, error) => {
+      const errorMessage = error.localizedDescription().UTF8String();
       // console.error("Authorization failed:", errorMessage);
 
       reject(new Error(errorMessage));
-
       finished(false);
     },
   });

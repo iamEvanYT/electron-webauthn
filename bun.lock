@@ -6,7 +6,8 @@
       "name": "electron-webauthn-test",
       "dependencies": {
         "@oslojs/webauthn": "^1.0.0",
-        "objc-js": "^1.1.0",
+        "objc-js": "^1.2.1",
+        "objcjs-types": "^0.4.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -42,7 +43,9 @@
 
     "node-gyp-build": ["node-gyp-build@4.8.4", "", { "bin": { "node-gyp-build": "bin.js", "node-gyp-build-optional": "optional.js", "node-gyp-build-test": "build-test.js" } }, "sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ=="],
 
-    "objc-js": ["objc-js@1.1.0", "", { "dependencies": { "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" }, "os": "darwin" }, "sha512-ywW1D4J+CmJI1/y/w+/qM6BkaLST9UX5xx+hmwQst3Pym5Nsk36wIxhqw4lPG6KxH0z6gyJ7HY2MMxdRrt8YPQ=="],
+    "objc-js": ["objc-js@1.2.1", "", { "dependencies": { "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" }, "os": "darwin" }, "sha512-NpEaYWhOsmgkCOaX+GfrW2Fjjp72T13o+eUb/OLiAIoUcfnYNqhHiMFdk/9E+RH9hznCmrTi79wqAAioMIsYbg=="],
+
+    "objcjs-types": ["objcjs-types@0.4.0", "", { "peerDependencies": { "objc-js": "^1.1.0", "typescript": "^5" }, "bin": { "objcjs-types": "bin/objcjs-types.ts" } }, "sha512-BuMxAZt80B+dHKlV1QJ3Js1mU8jKgtbUbmdzUwWdjOnsYxMX6s5y2dgd1gFYc9/ywyQ3+41nkI2qy0BbmW0X8A=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

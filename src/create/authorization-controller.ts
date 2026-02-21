@@ -1,10 +1,10 @@
 import { NobjcClass, NobjcObject, getPointer } from "objc-js";
-import { NSDataFromBuffer, type _NSData } from "../objc/foundation/nsdata.js";
-import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
 import type { ExcludeCredential } from "./internal-handler.js";
-import { NSStringFromString } from "../objc/foundation/nsstring.js";
-import { createASCPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-c-public-key-credential-descriptor.js";
-import { NSNumberFromInteger } from "../objc/foundation/nsinteger.js";
+import type { ASAuthorizationController } from "objcjs-types/AuthenticationServices";
+import { NSDataFromBuffer } from "objcjs-types/nsdata";
+import { NSArrayFromObjects, NSStringFromString } from "objcjs-types/helpers";
+import { NSNumber } from "objcjs-types/Foundation";
+import { ASCPublicKeyCredentialDescriptor } from "../additional-objc/ASCPublicKeyCredentialDescriptor.js";
 
 const createControllerState = new Map<
   string,
@@ -85,7 +85,8 @@ export const WebauthnCreateController = NobjcClass.define({
           const supportedAlgos: NobjcObject[] = [];
           for (const param of pubKeyCredParams) {
             if (param.type === "public-key") {
-              supportedAlgos.push(NSNumberFromInteger(param.algorithm));
+              const nsNum = NSNumber.numberWithInteger$(param.algorithm);
+              supportedAlgos.push(nsNum);
             }
           }
           if (supportedAlgos.length > 0) {
@@ -117,8 +118,9 @@ export const WebauthnCreateController = NobjcClass.define({
             const credentialID = NSDataFromBuffer(cred.id);
             const transportsArray = NSArrayFromObjects(transports);
 
+            // ASCPublicKeyCredentialDescriptor is a private class!
             const initializedDescriptor =
-              createASCPublicKeyCredentialDescriptor(
+              ASCPublicKeyCredentialDescriptor.alloc().initWithCredentialID$transports$(
                 credentialID,
                 transportsArray
               );
@@ -135,4 +137,5 @@ export const WebauthnCreateController = NobjcClass.define({
       },
     },
   },
-});
+}) as unknown as typeof ASAuthorizationController;
+// Basically just ASAuthorizationController with slight bit of overrides ^

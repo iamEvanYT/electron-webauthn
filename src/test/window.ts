@@ -1,30 +1,36 @@
-import { NobjcLibrary, NobjcProtocol, type NobjcObject } from "objc-js";
-import { allocInitPlain } from "../objc/helpers.js";
-import { NSStringFromString } from "../objc/foundation/nsstring.js";
+import { CGRect, createDelegate } from "objcjs-types";
+import {
+  NSApplication,
+  NSWindow,
+  NSWindowStyleMask,
+  type _NSWindow,
+} from "objcjs-types/AppKit";
+import { NSDate, NSRunLoop } from "objcjs-types/Foundation";
+import { options } from "objcjs-types/helpers";
 
-const AppKit = new NobjcLibrary(
-  "/System/Library/Frameworks/AppKit.framework/AppKit"
-);
-const Foundation = new NobjcLibrary(
-  "/System/Library/Frameworks/Foundation.framework/Foundation"
-);
-
-function createEmptyWindow(): NobjcObject {
-  const NSApp = AppKit.NSApplication!.sharedApplication()!;
-  const window = allocInitPlain(AppKit.NSWindow!);
-  const styleMask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3); // titled, closable, miniaturizable, resizable
+function createEmptyWindow() {
+  const NSApp = NSApplication.sharedApplication();
+  const window = NSWindow.alloc().init();
+  const styleMask = options(
+    NSWindowStyleMask.Titled,
+    NSWindowStyleMask.Closable,
+    NSWindowStyleMask.Miniaturizable,
+    NSWindowStyleMask.Resizable
+  );
 
   // Make the app active and show the window.
   window.setStyleMask$(styleMask);
-  window.setFrameFromString$(NSStringFromString("{{100, 100}, {800, 600}}"));
+  window.setFrame$display$(CGRect(100, 100, 800, 600), true);
+  // window.setFrameFromString$(NSStringFromString("{{100, 100}, {800, 600}}"));
   NSApp.setActivationPolicy$(0);
   NSApp.finishLaunching();
-  NSApp.activateIgnoringOtherApps$(true);
+  NSApp.activate();
+  // NSApp.activateIgnoringOtherApps$(true);
   window.setIsVisible$(true);
   window.makeKeyWindow();
   window.orderFrontRegardless();
 
-  const delegate = NobjcProtocol.implement("NSWindowDelegate", {
+  const delegate = createDelegate("NSWindowDelegate", {
     windowShouldClose$: () => {
       NSApp.terminate$(NSApp);
       return true;
@@ -51,9 +57,9 @@ function createEmptyWindow(): NobjcObject {
   process.once("SIGQUIT", handleSignal);
 
   // Pump the AppKit run loop for a short tick to keep JS responsive.
-  const runLoop = Foundation.NSRunLoop!.currentRunLoop()!;
+  const runLoop = NSRunLoop.currentRunLoop();
   const pump = () => {
-    const untilDate = Foundation.NSDate!.dateWithTimeIntervalSinceNow$(0.01)!;
+    const untilDate = NSDate.dateWithTimeIntervalSinceNow$(0.01);
     runLoop.runUntilDate$(untilDate);
   };
   const pumpId = setInterval(pump, 10);
@@ -62,9 +68,9 @@ function createEmptyWindow(): NobjcObject {
   return window;
 }
 
-function getNativeWindowHandle(window: NobjcObject): NobjcObject {
+function getNativeWindowHandle(window: _NSWindow) {
   // Electron expects an NSView* on macOS; contentView returns that NSView.
-  return window.contentView() as NobjcObject;
+  return window.contentView();
 }
 
 export { createEmptyWindow, getNativeWindowHandle };

@@ -1,43 +1,49 @@
-import { type NobjcObject } from "objc-js";
-import { createAuthorizationControllerDelegate } from "../objc/authentication-services/as-authorization-controller-delegate.js";
-import { ASAuthorizationController } from "../objc/authentication-services/as-authorization-controller.js";
-import { createPlatformPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-platform-public-key-credential-provider.js";
-import { createPlatformPublicKeyCredentialDescriptor } from "../objc/authentication-services/as-authorization-platform-public-key-credential-descriptor.js";
-import type { _ASAuthorization } from "../objc/authentication-services/as-authorization.js";
-import type { _ASAuthorizationPlatformPublicKeyCredentialAssertion } from "../objc/authentication-services/as-authorization-platform-public-key-credential-assertion.js";
-import { NSArrayFromObjects } from "../objc/foundation/nsarray.js";
-import {
-  type _NSData,
-  bufferFromNSDataDirect,
-  NSDataFromBuffer,
-} from "../objc/foundation/nsdata.js";
-import { NSStringFromString } from "../objc/foundation/nsstring.js";
-import type { _NSError } from "../objc/foundation/nserror.js";
-import type { _NSView } from "../objc/foundation/nsview.js";
 import { base64UrlToBuffer, PromiseWithResolvers } from "../helpers/index.js";
-import { ASAuthorizationPublicKeyCredentialAttachment } from "../objc/authentication-services/enums/as-authorization-public-key-credential-attachment.js";
 import {
   removeClientDataHash,
   setClientDataHash,
   WebauthnGetController,
 } from "../get/authorization-controller.js";
-import { createSecurityKeyPublicKeyCredentialProvider } from "../objc/authentication-services/as-authorization-security-key-public-key-credential-provider.js";
-import type { _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion } from "../objc/authentication-services/as-authorization-platform-security-key-credential-assertion.js";
-import { createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-large-blob-assertion-input.js";
-import { ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation } from "../objc/authentication-services/enums/as-authorization-public-key-credential-large-blob-assertion-operation.js";
-import { createASAuthorizationPublicKeyCredentialPRFAssertionInput } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input.js";
-import { type _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues } from "../objc/authentication-services/as-authorization-public-key-credential-prf-assertion-input-valuesas-authorization-public-key-credential-prf-assertion-input-values.js";
 import { type PRFInput, createPRFInput } from "../helpers/prf.js";
-import {
-  NSDictionaryFromKeysAndValues,
-  type _NSDictionary,
-} from "../objc/foundation/nsdictionary.js";
 import {
   generateClientDataInfo,
   generateWebauthnClientData,
 } from "../helpers/client-data.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import type { AuthenticatorAttachment } from "../helpers/types.js";
+import { NSStringFromString } from "objcjs-types/helpers";
+import {
+  ASAuthorizationPlatformPublicKeyCredentialProvider,
+  ASAuthorizationPublicKeyCredentialLargeBlobAssertionInput,
+  ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation,
+  ASAuthorizationPlatformPublicKeyCredentialDescriptor,
+  ASAuthorizationSecurityKeyPublicKeyCredentialProvider,
+  ASAuthorizationPublicKeyCredentialPRFAssertionInput,
+  ASAuthorizationPublicKeyCredentialAttachment,
+  type _ASAuthorizationPlatformPublicKeyCredentialAssertionRequest,
+  type _ASAuthorizationSecurityKeyPublicKeyCredentialAssertionRequest,
+  type _ASAuthorizationPlatformPublicKeyCredentialAssertion,
+  type _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion,
+  type _ASAuthorizationPublicKeyCredentialPRFAssertionInputValues,
+  ASAuthorizationPlatformPublicKeyCredentialAssertion,
+  ASAuthorizationSecurityKeyPublicKeyCredentialAssertion,
+  type _ASAuthorizationControllerPresentationContextProviding,
+} from "objcjs-types/AuthenticationServices";
+import { NSDataFromBuffer, bufferFromNSDataDirect } from "objcjs-types/nsdata";
+import { createDelegate } from "objcjs-types/delegates";
+import {
+  NSArray,
+  NSDictionary,
+  type _NSArray,
+  type _NSDictionary,
+  type _NSData,
+  type _NSError,
+} from "objcjs-types/Foundation";
+import type { NobjcObject } from "objc-js";
+import {
+  NSArrayFromObjects,
+  NSDictionaryFromKeysAndValues,
+} from "objcjs-types/helpers";
 
 export type UserVerificationPreference =
   | "preferred"
@@ -73,7 +79,9 @@ export interface GetCredentialAdditionalOptions {
 
 function setupPublicKeyCredentialRequest(
   type: "platform" | "security-key",
-  keyRequest: NobjcObject,
+  keyRequest:
+    | _ASAuthorizationPlatformPublicKeyCredentialAssertionRequest
+    | _ASAuthorizationSecurityKeyPublicKeyCredentialAssertionRequest,
   userVerificationPreference: UserVerificationPreference,
   enabledExtensions: CredentialAssertionExtensions[],
   allowedCredentialIds: Buffer[],
@@ -98,20 +106,18 @@ function setupPublicKeyCredentialRequest(
       const operation =
         ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Read;
       const largeBlobInput =
-        createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
+        ASAuthorizationPublicKeyCredentialLargeBlobAssertionInput.alloc().initWithOperation$(
           operation
         );
-
       keyRequest.setLargeBlob$(largeBlobInput);
     } else if (largeBlobWrite) {
       if (additionalOptions.largeBlobDataToWrite) {
         const operation =
           ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation.Write;
         const largeBlobInput =
-          createASAuthorizationPublicKeyCredentialLargeBlobAssertionInput(
+          ASAuthorizationPublicKeyCredentialLargeBlobAssertionInput.alloc().initWithOperation$(
             operation
           );
-
         largeBlobInput.setDataToWrite$(
           NSDataFromBuffer(additionalOptions.largeBlobDataToWrite)
         );
@@ -156,7 +162,7 @@ function setupPublicKeyCredentialRequest(
       }
 
       const prfInput =
-        createASAuthorizationPublicKeyCredentialPRFAssertionInput(
+        ASAuthorizationPublicKeyCredentialPRFAssertionInput.alloc().initWithInputValues$perCredentialInputValues$(
           inputValues,
           perCredentialInputValues
         );
@@ -190,7 +196,10 @@ function getCredentialInternal(
   const NS_challenge = NSDataFromBuffer(challenge);
 
   // let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
-  const platformProvider = createPlatformPublicKeyCredentialProvider(NS_rpID);
+  const platformProvider =
+    ASAuthorizationPlatformPublicKeyCredentialProvider.alloc().initWithRelyingPartyIdentifier$(
+      NS_rpID
+    );
 
   // let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challenge)
   const platformKeyRequest =
@@ -209,7 +218,9 @@ function getCredentialInternal(
 
   // let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: "example.com")
   const securityKeyProvider =
-    createSecurityKeyPublicKeyCredentialProvider(NS_rpID);
+    ASAuthorizationSecurityKeyPublicKeyCredentialProvider.alloc().initWithRelyingPartyIdentifier$(
+      NS_rpID
+    );
 
   // let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
   const securityKeyRequest =
@@ -231,7 +242,7 @@ function getCredentialInternal(
     platformKeyRequest,
     securityKeyRequest,
   ]);
-  const authController: typeof ASAuthorizationController.prototype =
+  const authController =
     WebauthnGetController.alloc().initWithAuthorizationRequests$(requestsArray);
   // OLD: const authController = createAuthorizationController(requestsArray);
 
@@ -265,30 +276,49 @@ function getCredentialInternal(
   if (allowedCredentialIds.length > 0) {
     const allowedCredentials = NSArrayFromObjects(
       allowedCredentialIds.map((id) =>
-        createPlatformPublicKeyCredentialDescriptor(NSDataFromBuffer(id))
+        ASAuthorizationPlatformPublicKeyCredentialDescriptor.alloc().initWithCredentialID$(
+          NSDataFromBuffer(id)
+        )
       )
     );
     platformKeyRequest.setAllowedCredentials$(allowedCredentials);
   }
 
   // authController.delegate = self
-  const delegate = createAuthorizationControllerDelegate({
-    didCompleteWithAuthorization: (_, authorization) => {
-      // Cast to _ASAuthorization to access typed methods
-      const credential = authorization.credential() as unknown as
-        | _ASAuthorizationPlatformPublicKeyCredentialAssertion
-        | _ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
+  const delegate = createDelegate("ASAuthorizationControllerDelegate", {
+    authorizationController$didCompleteWithAuthorization$: (
+      _,
+      authorization
+    ) => {
+      const credential = authorization.credential();
       // console.log("Authorization succeeded:", credential);
+
+      const isPlatform =
+        credential instanceof
+        ASAuthorizationPlatformPublicKeyCredentialAssertion;
+      const isSecurityKey =
+        credential instanceof
+        ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
+      if (!isPlatform && !isSecurityKey) {
+        reject(
+          new Error(
+            "Resulting credential is not a platform or security key credential"
+          )
+        );
+        finished(false);
+        return;
+      }
 
       const id_data = credential.credentialID();
       const id = bufferFromNSDataDirect(id_data);
 
-      let authenticatorAttachment: AuthenticatorAttachment = "platform";
+      let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
       if (
+        isPlatform &&
         credential.attachment() ===
-        ASAuthorizationPublicKeyCredentialAttachment.ASAuthorizationPublicKeyCredentialAttachmentCrossPlatform
+          ASAuthorizationPublicKeyCredentialAttachment.Platform
       ) {
-        authenticatorAttachment = "cross-platform";
+        authenticatorAttachment = "platform";
       }
 
       const prf = credential.prf();
@@ -325,14 +355,11 @@ function getCredentialInternal(
 
       finished(true);
     },
-    didCompleteWithError: (_, error) => {
-      // Parse the NSError into a readable format
-      const parsedError = error as unknown as typeof _NSError.prototype;
-      const errorMessage = parsedError.localizedDescription().UTF8String();
+    authorizationController$didCompleteWithError$: (_, error) => {
+      const errorMessage = error.localizedDescription().UTF8String();
       // console.error("Authorization failed:", errorMessage);
 
       reject(new Error(errorMessage));
-
       finished(false);
     },
   });
@@ -340,7 +367,9 @@ function getCredentialInternal(
 
   // authController.presentationContextProvider = self
   const presentationContextProvider =
-    createPresentationContextProviderFromNativeWindowHandle(nativeWindowHandle);
+    createPresentationContextProviderFromNativeWindowHandle(
+      nativeWindowHandle
+    ) as _ASAuthorizationControllerPresentationContextProviding;
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()

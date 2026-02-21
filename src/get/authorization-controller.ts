@@ -1,5 +1,6 @@
 import { NobjcClass, NobjcObject, getPointer } from "objc-js";
-import { NSDataFromBuffer, type _NSData } from "../objc/foundation/nsdata.js";
+import type { ASAuthorizationController } from "objcjs-types/AuthenticationServices";
+import { NSDataFromBuffer } from "objcjs-types/nsdata";
 
 const getControllerState = new Map<string, Buffer>();
 
@@ -53,4 +54,5 @@ export const WebauthnGetController = NobjcClass.define({
       },
     },
   },
-});
+}) as unknown as typeof ASAuthorizationController;
+// Basically just ASAuthorizationController with slight bit of overrides ^
