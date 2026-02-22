@@ -71,6 +71,52 @@ interface CreateCredentialErrorResult {
 }
 ```
 
+## `listPasskeys(relyingPartyId)`
+
+Lists all platform passkeys stored on the device for a given relying party.
+
+> [!NOTE]
+> Requires macOS 13.3+ and the `com.apple.developer.web-browser.public-key-credential` entitlement. See the [Entitlements and Provisioning Guide](./entitlements-and-provisioning.md) for setup instructions.
+
+On first call, macOS will prompt the user to grant your app access to stored passkeys via a system permission dialog. If the user denies, subsequent calls will return an error until the permission is re-granted in **System Settings > Privacy & Security**.
+
+### Parameters
+
+- **`relyingPartyId: string`** (required) - The relying party identifier (e.g., `"example.com"`)
+
+### Returns
+
+`Promise<ListPasskeysResult | ListPasskeysError>` - Resolves with the list of credentials or an error object
+
+### Result Types
+
+```typescript
+type ListPasskeysResult = {
+  success: true;
+  credentials: PasskeyCredential[];
+};
+
+type ListPasskeysError = {
+  success: false;
+  error: Error; // Includes message with details (e.g., permission denied, unsupported OS)
+};
+
+interface PasskeyCredential {
+  id: string;         // Base64url-encoded credential ID
+  rpId: string;       // The relying party identifier
+  userName: string;   // The user name associated with the credential
+  userHandle: string; // Base64url-encoded user handle
+}
+```
+
+### Error Scenarios
+
+- **Unsupported OS**: Throws if the current macOS version is below 13.3
+- **Permission denied**: Throws if the user denied access in the system permission dialog
+- **Missing entitlement**: The `com.apple.developer.web-browser.public-key-credential` entitlement must be present
+
+---
+
 ## `getCredential(publicKeyOptions, additionalOptions)`
 
 Performs a WebAuthn assertion (authentication) using available platform and cross-platform authenticators.

@@ -21,6 +21,7 @@ This package provides JavaScript bindings to Apple's AuthenticationServices fram
 - Credential creation (registration) with attestation
 - Credential authentication (assertions) with existing credentials
 - Seamless integration with Electron's native window system
+- Passkey listing via `listPasskeys` (macOS 13.3+)
 - PRF (Pseudo-Random Function) extension support
 - Large Blob extension support for reading/writing credential-specific data
 - User verification preference configuration (preferred, required, discouraged)
@@ -83,7 +84,7 @@ This library implements the W3C WebAuthn standard using Apple's native Authentic
 
 ## Error Handling
 
-Both `createCredential` and `getCredential` functions return a result object with a `success` field. Always check this field:
+`createCredential`, `getCredential`, and `listPasskeys` all return a result object with a `success` field. Always check this field:
 
 ```typescript
 const result = await createCredential(publicKeyOptions, additionalOptions);
@@ -118,6 +119,19 @@ if (!result.success) {
 console.log("Credential ID:", result.data.credentialId);
 ```
 
+`listPasskeys` returns an `Error` object (not a string code) when unsuccessful:
+
+```typescript
+const result = await listPasskeys("example.com");
+
+if (!result.success) {
+  console.error("Failed to list passkeys:", result.error.message);
+  return;
+}
+
+console.log(`Found ${result.credentials.length} passkeys`);
+```
+
 ### Common Error Scenarios
 
 #### For Both Registration and Authentication
@@ -141,6 +155,7 @@ console.log("Credential ID:", result.data.credentialId);
 
 - ✅ WebAuthn credential creation (registration/attestation)
 - ✅ WebAuthn assertions (authentication with existing credentials)
+- ✅ Passkey listing with `listPasskeys` (macOS 13.3+, requires `com.apple.developer.web-browser.public-key-credential` entitlement)
 - ✅ Cross-platform authenticators (external security keys like YubiKey)
 - ✅ Platform authenticators (Touch ID, Face ID)
 - ✅ Discoverable credentials (resident keys)

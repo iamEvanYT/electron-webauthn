@@ -18,7 +18,13 @@ import type {
   ListPasskeysResult,
   ListPasskeysError,
 } from "./types.js";
-import { makePromise, enumFromValue } from "../helpers/objc.js";
+import { enumFromValue, makePromise1Result } from "objcjs-types/helpers";
+
+const LOGGING_ENABLED = false;
+function log(...args: Parameters<typeof console.log>) {
+  if (!LOGGING_ENABLED) return;
+  console.log(...args);
+}
 
 /**
  * List platform passkeys for a relying party ID using ASAuthorizationWebBrowserPublicKeyCredentialManager.
@@ -60,7 +66,7 @@ export async function listPasskeys(
 
     // Check authorization state
     const authState = manager.authorizationStateForPlatformCredentials();
-    console.log(`[listPasskeys] Authorization state: ${authState}`);
+    log(`[listPasskeys] Authorization state: ${authState}`);
     // 0 = authorized, 1 = denied, 2 = notDetermined
 
     if (
@@ -68,17 +74,17 @@ export async function listPasskeys(
       ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState.NotDetermined
     ) {
       // notDetermined
-      console.log("[listPasskeys] Authorization not determined, requesting...");
+      log("[listPasskeys] Authorization not determined, requesting...");
 
       // Request authorization with completion handler
-      const newStateValue = await makePromise(
-        manager.requestAuthorizationForPublicKeyCredentials$
+      const newStateValue = await makePromise1Result(
+        manager.requestAuthorizationForPublicKeyCredentials$.bind(manager)
       );
       const newState = enumFromValue(
         ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState,
         newStateValue
       );
-      console.log(
+      log(
         `[listPasskeys] Authorization request completed, new state: ${newState}`
       );
     } else if (
@@ -90,21 +96,23 @@ export async function listPasskeys(
         "Authorization DENIED - user must grant permission in System Settings > Privacy & Security"
       );
     } else {
-      console.log("[listPasskeys] Authorization already granted");
+      log("[listPasskeys] Authorization already granted");
     }
 
     // Get platform credentials for the relying party
     const rpIdString = NSStringFromString(relyingPartyId);
-    console.log(
+    log(
       `[listPasskeys] Calling platformCredentialsForRelyingParty: ${relyingPartyId}`
     );
-    const credentialsArray = await makePromise(
-      rpIdString,
-      manager.platformCredentialsForRelyingParty$completionHandler$
+    const credentialsArray = await makePromise1Result(
+      manager.platformCredentialsForRelyingParty$completionHandler$.bind(
+        manager
+      ),
+      rpIdString
     );
 
     const count = credentialsArray.count();
-    console.log(`[listPasskeys] platformCredentials returned ${count} entries`);
+    log(`[listPasskeys] platformCredentials returned ${count} entries`);
 
     const credentials: PasskeyCredential[] = [];
 
@@ -126,7 +134,7 @@ export async function listPasskeys(
         bufferFromNSDataDirect(userHandleData)
       );
 
-      console.log(
+      log(
         `[listPasskeys] Found credential: name=${userName}, id=${credentialId.substring(
           0,
           20
@@ -141,13 +149,13 @@ export async function listPasskeys(
       });
     }
 
-    console.log(`[listPasskeys] Returning ${credentials.length} results`);
+    log(`[listPasskeys] Returning ${credentials.length} results`);
     return {
       success: true,
       credentials,
     };
   } catch (error) {
-    console.error("[listPasskeys] Error:", error);
+    console.error("[listPasskeys] ", error);
     return {
       success: false,
       error: error instanceof Error ? error : new Error(String(error)),

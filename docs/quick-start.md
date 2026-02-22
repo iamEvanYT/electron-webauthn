@@ -56,6 +56,30 @@ async function register(window: BrowserWindow, challenge: ArrayBuffer) {
 }
 ```
 
+## Listing Stored Passkeys
+
+> [!NOTE]
+> Requires macOS 13.3+ and the `com.apple.developer.web-browser.public-key-credential` entitlement.
+
+```typescript
+import { listPasskeys } from "electron-webauthn";
+
+async function showPasskeys() {
+  const result = await listPasskeys("example.com");
+
+  if (result.success) {
+    console.log(`Found ${result.credentials.length} passkey(s):`);
+    result.credentials.forEach((cred) => {
+      console.log(`- ${cred.userName} (id: ${cred.id.substring(0, 20)}...)`);
+    });
+  } else {
+    console.error("Failed to list passkeys:", result.error.message);
+  }
+}
+```
+
+On first use, macOS will show a system permission dialog asking the user to grant access to stored passkeys. If denied, you can direct the user to **System Settings > Privacy & Security** to re-enable access.
+
 ## Authenticating with a Credential
 
 ```typescript
