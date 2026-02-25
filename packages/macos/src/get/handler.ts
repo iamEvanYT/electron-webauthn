@@ -2,87 +2,15 @@ import { bufferSourceToBuffer, bufferToBase64Url } from "../helpers/index.js";
 import type { PRFInput } from "../helpers/prf.js";
 import { isRpIdAllowedForOrigin } from "../helpers/rpid.js";
 import { isNumber, isString } from "../helpers/validation.js";
+import type {
+  GetCredentialResult,
+  GetCredentialSuccessData,
+  WebauthnGetRequestOptions,
+} from "@electron-webauthn/types";
 import {
   getCredentialInternal,
   type CredentialAssertionExtensions,
 } from "./internal-handler.js";
-
-export type GetCredentialErrorCodes =
-  | "TypeError"
-  | "AbortError"
-  | "NotAllowedError"
-  | "SecurityError";
-
-/**
- * The result of getting a credential.
- */
-export interface GetCredentialSuccessData {
-  credentialId: string;
-  clientDataJSON: string;
-  authenticatorData: string;
-  signature: string;
-  userHandle: string;
-  extensions?: {
-    prf?: {
-      results?: {
-        first: string; // b64 encoded
-        second?: string; // b64 encoded
-      };
-    };
-    largeBlob?: {
-      blob?: string; // b64 encoded
-      written?: boolean;
-    };
-  };
-}
-
-interface WebauthnGetRequestOptions {
-  // Origins //
-
-  /**
-   * The origin of the requesting document.
-   */
-  currentOrigin: string;
-
-  /**
-   * The origin of the top frame document.
-   *
-   * If the requesting document is an iframe, this should be the origin of the top frame document.
-   * If not, it should be left blank.
-   */
-  topFrameOrigin: string | undefined;
-
-  // Public Suffix check //
-
-  /**
-   * Return true if the input is a public suffix (eTLD), e.g. "com", "co.uk".
-   *
-   * Strongly recommended to implement using PSL (e.g. tldts).
-   */
-  isPublicSuffix?: (domain: string) => boolean;
-
-  // Others //
-
-  /**
-   * Can be found in Electron with `BrowserWindow.getNativeWindowHandle()`.
-   *
-   * Otherwise, this is the pointer to a NSView object.
-   */
-  nativeWindowHandle: Buffer;
-}
-
-interface GetCredentialSuccessResult {
-  success: true;
-  data: GetCredentialSuccessData;
-}
-interface GetCredentialErrorResult {
-  success: false;
-  error: GetCredentialErrorCodes;
-  errorObject?: Error;
-}
-export type GetCredentialResult =
-  | GetCredentialSuccessResult
-  | GetCredentialErrorResult;
 
 interface ExtensionsConfigurationResult {
   extensions: CredentialAssertionExtensions[];

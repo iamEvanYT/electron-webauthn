@@ -1,16 +1,22 @@
 {
   "compilerOptions": {
+    // Environment setup & latest features
     "lib": ["ESNext", "DOM"],
     "target": "ESNext",
     "module": "Node16",
     "moduleDetection": "force",
     "baseUrl": ".",
     "paths": {
-      "@electron-webauthn/types": ["./packages/types/index.d.ts"]
+      "@electron-webauthn/types": ["../types/index.d.ts"]
     },
+    "jsx": "react-jsx",
     "allowJs": true,
+
+    // Directories setup
     "rootDir": "./src",
     "outDir": "./dist",
+
+    // Node.js ESM mode - requires .js extensions
     "moduleResolution": "node16",
     "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": true,
@@ -19,15 +25,18 @@
     "declarationMap": false,
     "sourceMap": false,
     "removeComments": true,
+
+    // Best practices
     "strict": true,
     "strictNullChecks": false,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
+
+    // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  },
-  "include": ["src/**/*.ts"]
+  }
 }

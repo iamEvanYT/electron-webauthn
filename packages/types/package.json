@@ -1,0 +1,14 @@
+{
+  "name": "@electron-webauthn/types",
+  "version": "1.2.0",
+  "description": "Shared public types for electron-webauthn packages.",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts"
+    }
+  },
+  "files": [
+    "index.d.ts"
+  ]
+}

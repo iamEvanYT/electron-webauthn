@@ -1,9 +1,9 @@
 {
-  "name": "electron-webauthn",
+  "name": "@electron-webauthn/macos",
   "version": "1.2.0",
   "repository": "https://github.com/iamEvanYT/electron-webauthn.git",
   "homepage": "https://github.com/iamEvanYT/electron-webauthn#readme",
-  "description": "Cross-platform loader for native WebAuthn support on macOS.",
+  "description": "macOS implementation package for electron-webauthn.",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,18 +15,15 @@
     }
   },
   "files": [
-    "dist",
-    "dist/**"
+    "dist/"
+  ],
+  "os": [
+    "darwin"
   ],
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
-    "build:macos": "npm run build -w @electron-webauthn/macos",
-    "build:all": "npm run build && npm run build:macos",
-    "test": "bun test"
+    "build": "rm -rf dist && tsc -p tsconfig.json && rm -rf dist/test",
+    "test": "bun run src/test/index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -35,9 +32,12 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@electron-webauthn/types": "^1.2.0"
+    "@electron-webauthn/types": "^1.2.0",
+    "@oslojs/webauthn": "^1.0.0",
+    "objc-js": "^1.3.1",
+    "objcjs-types": "^0.5.1"
   },
-  "optionalDependencies": {
-    "@electron-webauthn/macos": "^1.2.0"
-  }
+  "trustedDependencies": [
+    "objc-js"
+  ]
 }

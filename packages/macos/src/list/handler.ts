@@ -17,7 +17,7 @@ import type {
   PasskeyCredential,
   ListPasskeysResult,
   ListPasskeysError,
-} from "./types.js";
+} from "@electron-webauthn/types";
 import { enumFromValue, makePromise1Result } from "objcjs-types/helpers";
 
 const LOGGING_ENABLED = false;

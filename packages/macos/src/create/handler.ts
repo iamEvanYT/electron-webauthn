@@ -3,6 +3,11 @@ import { bufferSourceToBuffer, bufferToBase64Url } from "../helpers/index.js";
 import type { PRFInput } from "../helpers/prf.js";
 import { isRpIdAllowedForOrigin } from "../helpers/rpid.js";
 import { isNumber, isObject, isString } from "../helpers/validation.js";
+import type {
+  CreateCredentialResult,
+  CreateCredentialSuccessData,
+  WebauthnCreateRequestOptions,
+} from "@electron-webauthn/types";
 import type { PublicKeyCredentialParams } from "./authorization-controller.js";
 import {
   createCredentialInternal,
@@ -11,89 +16,6 @@ import {
   type ExcludeCredential,
   type LargeBlobSupport,
 } from "./internal-handler.js";
-
-export type CreateCredentialErrorCodes =
-  | "TypeError"
-  | "AbortError"
-  | "NotAllowedError"
-  | "SecurityError"
-  | "InvalidStateError";
-
-/**
- * The result of getting a credential.
- */
-export interface CreateCredentialSuccessData {
-  credentialId: string;
-  clientDataJSON: string;
-  attestationObject: string;
-  authData: string;
-  publicKey: string;
-  publicKeyAlgorithm: number;
-  transports: string[];
-  extensions: {
-    credProps?: {
-      rk: boolean;
-    };
-    prf?: {
-      enabled?: boolean;
-      results: {
-        first?: string; // b64 encoded
-        second?: string; // b64 encoded
-      };
-    };
-    largeBlob?: {
-      supported?: boolean;
-    };
-  };
-}
-
-interface WebauthnCreateRequestOptions {
-  // Origins //
-
-  /**
-   * The origin of the requesting document.
-   */
-  currentOrigin: string;
-
-  /**
-   * The origin of the top frame document.
-   *
-   * If the requesting document is an iframe, this should be the origin of the top frame document.
-   * If not, it should be left blank.
-   */
-  topFrameOrigin: string | undefined;
-
-  // Public Suffix check //
-
-  /**
-   * Return true if the input is a public suffix (eTLD), e.g. "com", "co.uk".
-   *
-   * Strongly recommended to implement using PSL (e.g. tldts).
-   */
-  isPublicSuffix?: (domain: string) => boolean;
-
-  // Others //
-
-  /**
-   * Can be found in Electron with `BrowserWindow.getNativeWindowHandle()`.
-   *
-   * Otherwise, this is the pointer to a NSView object.
-   */
-  nativeWindowHandle: Buffer;
-}
-
-interface CreateCredentialSuccessResult {
-  success: true;
-  data: CreateCredentialSuccessData;
-}
-interface CreateCredentialErrorResult {
-  success: false;
-  error: CreateCredentialErrorCodes;
-  errorObject?: Error;
-}
-export type CreateCredentialResult =
-  | CreateCredentialSuccessResult
-  | CreateCredentialErrorResult;
 
 interface ExtensionsConfigurationResult {
   extensions: CredentialCreationExtensions[];
