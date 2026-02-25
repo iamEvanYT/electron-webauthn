@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "objcjs-types": "^0.5.1"
+    "objcjs-types": "^0.5.2"
   },
   "peerDependencies": {
     "typescript": "^5"

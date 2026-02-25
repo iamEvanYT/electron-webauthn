@@ -27,7 +27,7 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
-        "objcjs-types": "^0.5.1",
+        "objcjs-types": "^0.5.2",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -70,7 +70,7 @@
 
     "objc-js": ["objc-js@1.3.1", "", { "dependencies": { "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" }, "os": "darwin" }, "sha512-2Ut+kCnLiiPkDOd6+4B+FJUnbg3SO5N/LCKI/lEahF4C/goYdsne6LGvvLFPplu+ofkeJLdTpEGkYQD7cgmbMg=="],
 
-    "objcjs-types": ["objcjs-types@0.5.1", "", { "peerDependencies": { "objc-js": "^1.1.0", "typescript": "^5" }, "bin": { "objcjs-types": "bin/objcjs-types.ts" } }, "sha512-Qq4qcqmUi0kqAevpwNYvfasH4KYS+fNunPQuV9WN29LB6Z+hRZqnSyN1ZIkOYefnynVUKayX0kFYBLQLSWXpvg=="],
+    "objcjs-types": ["objcjs-types@0.5.2", "", { "peerDependencies": { "objc-js": "^1.3.1", "typescript": "^5" }, "bin": { "objcjs-types": "bin/objcjs-types.ts" } }, "sha512-C/vz7PSu6lc0B4cY1ezSD0998GyLxMDoKNuCpx1F0nmYe/mjg1NXrzf7aoxq6EqC33hI6AE77wX+oEA8euiiPw=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
