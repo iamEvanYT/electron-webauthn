@@ -4,6 +4,9 @@
   "repository": "https://github.com/iamEvanYT/electron-webauthn.git",
   "homepage": "https://github.com/iamEvanYT/electron-webauthn#readme",
   "description": "macOS implementation package for electron-webauthn.",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,11 +25,12 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json && rm -rf dist/test",
+    "build": "rm -rf dist && bun build ./src/index.ts --target=node --format=esm --outfile=./dist/index.js --external objc-js --external electron && tsc -p tsconfig.json --emitDeclarationOnly && rm -rf dist/test",
     "test": "bun run src/test/index.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "objcjs-types": "^0.5.1"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -34,8 +38,7 @@
   "dependencies": {
     "@electron-webauthn/types": "^1.2.0",
     "@oslojs/webauthn": "^1.0.0",
-    "objc-js": "^1.3.1",
-    "objcjs-types": "^0.5.1"
+    "objc-js": "^1.3.1"
   },
   "trustedDependencies": [
     "objc-js"

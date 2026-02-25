@@ -3,6 +3,9 @@
   "version": "1.2.0",
   "description": "Shared public types for electron-webauthn packages.",
   "types": "index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./index.d.ts"

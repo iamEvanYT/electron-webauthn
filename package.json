@@ -24,8 +24,8 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
-    "build:macos": "npm run build -w @electron-webauthn/macos",
-    "build:all": "npm run build && npm run build:macos",
+    "build:macos": "cd packages/macos && bun run build",
+    "build:all": "bun run build && bun run build:macos",
     "test": "bun test"
   },
   "devDependencies": {
