@@ -1,24 +1,25 @@
-import { bufferToBase64Url, PromiseWithResolvers } from "../helpers/index.js";
+import { bufferToBase64Url } from "../helpers/index.js";
+import {
+  createPasskeyAuthorizationManager,
+  getListPasskeyAuthorizationStatus as getListPasskeyAuthorizationStatusInternal,
+  requestListPasskeyAuthorization as requestListPasskeyAuthorizationInternal,
+  resolvePasskeyAuthorization,
+} from "../helpers/passkey-authorization.js";
+import { ensureListPasskeysSupported } from "./support.js";
 import { bufferFromNSDataDirect } from "objcjs-types/nsdata";
 import { NSStringFromString } from "objcjs-types/helpers";
 import {
-  ASAuthorizationWebBrowserPublicKeyCredentialManager,
-  ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState,
   type _ASAuthorizationWebBrowserPlatformPublicKeyCredential,
   type _ASAuthorizationWebBrowserPublicKeyCredentialManager,
 } from "objcjs-types/AuthenticationServices";
-import {
-  isAtLeast,
-  version,
-  formatVersion,
-  getOSVersion,
-} from "objcjs-types/osversion";
 import type {
-  PasskeyCredential,
-  ListPasskeysResult,
   ListPasskeysError,
+  ListPasskeysOptions,
+  ListPasskeysResult,
+  PasskeyAuthorizationError,
+  PasskeyAuthorizationResult,
+  PasskeyCredential,
 } from "@electron-webauthn/types";
-import { enumFromValue, makePromise1Result } from "objcjs-types/helpers";
 
 const LOGGING_ENABLED = false;
 function log(...args: Parameters<typeof console.log>) {
@@ -26,12 +27,56 @@ function log(...args: Parameters<typeof console.log>) {
   console.log(...args);
 }
 
+const AUTHORIZATION_DENIED_ERROR =
+  "Authorization DENIED - user must grant permission in System Settings > Privacy & Security";
+const AUTHORIZATION_NOT_DETERMINED_ERROR =
+  "Authorization not determined. Call requestListPasskeyAuthorization() first or pass { requestAuthorization: true } to listPasskeys().";
+
+async function getPlatformCredentials(
+  manager: _ASAuthorizationWebBrowserPublicKeyCredentialManager,
+  relyingPartyId: string
+) {
+  const rpIdString = NSStringFromString(relyingPartyId);
+  log(
+    `[listPasskeys] Calling platformCredentialsForRelyingParty: ${relyingPartyId}`
+  );
+
+  return new Promise<any>((resolve) => {
+    manager.platformCredentialsForRelyingParty$completionHandler$(
+      rpIdString,
+      (credentialsArray) => {
+        resolve(credentialsArray);
+      }
+    );
+  });
+}
+
+function isExpectedListPasskeysError(error: Error) {
+  return (
+    error.message === AUTHORIZATION_DENIED_ERROR ||
+    error.message === AUTHORIZATION_NOT_DETERMINED_ERROR
+  );
+}
+
+export function getListPasskeyAuthorizationStatus(): Promise<
+  PasskeyAuthorizationResult | PasskeyAuthorizationError
+> {
+  return getListPasskeyAuthorizationStatusInternal();
+}
+
+export function requestListPasskeyAuthorization(): Promise<
+  PasskeyAuthorizationResult | PasskeyAuthorizationError
+> {
+  return requestListPasskeyAuthorizationInternal();
+}
+
 /**
  * List platform passkeys for a relying party ID using ASAuthorizationWebBrowserPublicKeyCredentialManager.
  *
- * Requires macOS 13.5+ and the com.apple.developer.web-browser.public-key-credential entitlement.
+ * Requires macOS 13.3+ and the com.apple.developer.web-browser.public-key-credential entitlement.
  *
  * @param relyingPartyId - The relying party identifier (e.g., "example.com")
+ * @param options - Optional behavior flags for authorization prompting
  * @returns Promise that resolves with the list of credentials or rejects with an error
  *
  * @example
@@ -46,70 +91,39 @@ function log(...args: Parameters<typeof console.log>) {
  * ```
  */
 export async function listPasskeys(
-  relyingPartyId: string
+  relyingPartyId: string,
+  options: ListPasskeysOptions = {}
 ): Promise<ListPasskeysResult | ListPasskeysError> {
   try {
-    // Check macOS version requirement (13.3+)
-    const minVersion = version(13, 3);
-    if (!isAtLeast(minVersion)) {
-      const currentVersion = getOSVersion();
-      throw new Error(
-        `Passkey listing requires macOS 13.3 or later (current: ${formatVersion(
-          currentVersion
-        )})`
-      );
+    ensureListPasskeysSupported();
+
+    const manager = createPasskeyAuthorizationManager();
+    const requestAuthorization = options.requestAuthorization ?? true;
+    const authorizationStatus = await resolvePasskeyAuthorization({
+      requestIfNeeded: requestAuthorization,
+      manager,
+    });
+
+    log(`[listPasskeys] Authorization status: ${authorizationStatus}`);
+
+    if (authorizationStatus === "denied") {
+      throw new Error(AUTHORIZATION_DENIED_ERROR);
     }
 
-    // Create the manager instance
-    const manager =
-      ASAuthorizationWebBrowserPublicKeyCredentialManager.alloc().init();
-
-    // Check authorization state
-    const authState = manager.authorizationStateForPlatformCredentials();
-    log(`[listPasskeys] Authorization state: ${authState}`);
-    // 0 = authorized, 1 = denied, 2 = notDetermined
-
-    if (
-      authState ===
-      ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState.NotDetermined
-    ) {
-      // notDetermined
-      log("[listPasskeys] Authorization not determined, requesting...");
-
-      // Request authorization with completion handler
-      const newStateValue = await makePromise1Result(
-        manager.requestAuthorizationForPublicKeyCredentials$.bind(manager)
-      );
-      const newState = enumFromValue(
-        ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState,
-        newStateValue
-      );
-      log(
-        `[listPasskeys] Authorization request completed, new state: ${newState}`
-      );
-    } else if (
-      authState ===
-      ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState.Denied
-    ) {
-      // denied
-      throw new Error(
-        "Authorization DENIED - user must grant permission in System Settings > Privacy & Security"
-      );
-    } else {
-      log("[listPasskeys] Authorization already granted");
+    if (authorizationStatus === "notDetermined") {
+      throw new Error(AUTHORIZATION_NOT_DETERMINED_ERROR);
     }
 
     // Get platform credentials for the relying party
-    const rpIdString = NSStringFromString(relyingPartyId);
-    log(
-      `[listPasskeys] Calling platformCredentialsForRelyingParty: ${relyingPartyId}`
+    const credentialsArray = await getPlatformCredentials(
+      manager,
+      relyingPartyId
     );
-    const credentialsArray = await makePromise1Result(
-      manager.platformCredentialsForRelyingParty$completionHandler$.bind(
-        manager
-      ),
-      rpIdString
-    );
+
+    // Happens when you don't have the entitlement
+    if (!credentialsArray) {
+      throw new Error("Unknown error occurred");
+    }
 
     const count = credentialsArray.count();
     log(`[listPasskeys] platformCredentials returned ${count} entries`);
@@ -155,10 +169,14 @@ export async function listPasskeys(
       credentials,
     };
   } catch (error) {
-    console.error("[listPasskeys] ", error);
+    const normalizedError =
+      error instanceof Error ? error : new Error(String(error));
+    if (!isExpectedListPasskeysError(normalizedError)) {
+      console.error("[listPasskeys] ", normalizedError);
+    }
     return {
       success: false,
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: normalizedError,
     };
   }
 }

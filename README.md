@@ -24,6 +24,7 @@ The root `electron-webauthn` package is a cross-platform shim that lazy-loads `@
 - Credential authentication (assertions) with existing credentials
 - Seamless integration with Electron's native window system
 - Passkey listing via `listPasskeys` (macOS 13.3+)
+- Explicit passkey-listing authorization APIs with `getListPasskeyAuthorizationStatus` and `requestListPasskeyAuthorization`
 - PRF (Pseudo-Random Function) extension support
 - Large Blob extension support for reading/writing credential-specific data
 - User verification preference configuration (preferred, required, discouraged)
@@ -88,7 +89,7 @@ This library implements the W3C WebAuthn standard using Apple's native Authentic
 
 ## Error Handling
 
-`createCredential`, `getCredential`, and `listPasskeys` all return a result object with a `success` field. Always check this field:
+`createCredential`, `getCredential`, `getListPasskeyAuthorizationStatus`, `requestListPasskeyAuthorization`, and `listPasskeys` all return a result object with a `success` field. Always check this field:
 
 ```typescript
 const result = await createCredential(publicKeyOptions, additionalOptions);
@@ -126,7 +127,14 @@ console.log("Credential ID:", result.data.credentialId);
 `listPasskeys` returns an `Error` object (not a string code) when unsuccessful:
 
 ```typescript
-const result = await listPasskeys("example.com");
+const permission = await getListPasskeyAuthorizationStatus();
+if (permission.success && permission.status === "notDetermined") {
+  await requestListPasskeyAuthorization();
+}
+
+const result = await listPasskeys("example.com", {
+  requestAuthorization: false,
+});
 
 if (!result.success) {
   console.error("Failed to list passkeys:", result.error.message);
@@ -152,6 +160,12 @@ console.log(`Found ${result.credentials.length} passkeys`);
 #### Authentication-Specific (`getCredential`)
 
 - **NotAllowedError**: No valid credentials available for the specified rpId
+
+#### Passkey Authorization / Listing
+
+- **`getListPasskeyAuthorizationStatus()`**: Returns `authorized`, `denied`, or `notDetermined` without prompting
+- **`requestListPasskeyAuthorization()`**: Shows the macOS permission prompt only when the current state is `notDetermined`
+- **`listPasskeys(..., { requestAuthorization: false })`**: Returns an `Error` when permission has not been decided yet instead of triggering the prompt automatically
 
 ## Feature Support
 

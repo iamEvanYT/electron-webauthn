@@ -3,8 +3,10 @@ import {
   __setMacosLoaderForTesting,
   __setPlatformForTesting,
   createCredential,
+  getListPasskeyAuthorizationStatus,
   getCredential,
   listPasskeys,
+  requestListPasskeyAuthorization,
 } from "../src/index";
 
 afterEach(() => {
@@ -21,6 +23,12 @@ describe("electron-webauthn shim", () => {
 
     const list = await listPasskeys("example.com");
     expect(list.success).toBe(false);
+
+    const status = await getListPasskeyAuthorizationStatus();
+    expect(status.success).toBe(false);
+
+    const request = await requestListPasskeyAuthorization();
+    expect(request.success).toBe(false);
 
     const create = await createCredential(undefined, {
       currentOrigin: "https://example.com",
@@ -50,17 +58,27 @@ describe("electron-webauthn shim", () => {
         async getCredential() {
           return { success: false, error: "NotAllowedError" as const };
         },
+        async getListPasskeyAuthorizationStatus() {
+          return { success: true, status: "authorized" as const };
+        },
         async listPasskeys() {
           return { success: true, credentials: [] };
+        },
+        async requestListPasskeyAuthorization() {
+          return { success: true, status: "authorized" as const };
         },
       };
     });
 
     const first = await listPasskeys("example.com");
     const second = await listPasskeys("example.com");
+    const status = await getListPasskeyAuthorizationStatus();
+    const request = await requestListPasskeyAuthorization();
 
     expect(first.success).toBe(true);
     expect(second.success).toBe(true);
+    expect(status).toEqual({ success: true, status: "authorized" });
+    expect(request).toEqual({ success: true, status: "authorized" });
     expect(loadCount).toBe(1);
   });
 });

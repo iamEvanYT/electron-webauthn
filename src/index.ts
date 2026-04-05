@@ -1,8 +1,11 @@
 import type {
   CreateCredentialResult,
   GetCredentialResult,
+  ListPasskeysOptions,
   ListPasskeysError,
   ListPasskeysResult,
+  PasskeyAuthorizationError,
+  PasskeyAuthorizationResult,
   WebauthnCreateRequestOptions,
   WebauthnGetRequestOptions,
   WebauthnModule,
@@ -19,8 +22,12 @@ export type {
   GetCredentialSuccessData,
   GetCredentialSuccessResult,
   GetCredentialErrorResult,
+  ListPasskeysOptions,
   ListPasskeysError,
   ListPasskeysResult,
+  PasskeyAuthorizationError,
+  PasskeyAuthorizationResult,
+  PasskeyAuthorizationStatus,
   PasskeyCredential,
   WebauthnCreateRequestOptions,
   WebauthnGetRequestOptions,
@@ -44,6 +51,13 @@ const unsupportedCreateResult: CreateCredentialResult = {
 };
 
 const unsupportedListResult: ListPasskeysError = {
+  success: false,
+  error: new Error(
+    "electron-webauthn is only available on macOS. Install @electron-webauthn/macos on Darwin hosts."
+  ),
+};
+
+const unsupportedPasskeyAuthorizationResult: PasskeyAuthorizationError = {
   success: false,
   error: new Error(
     "electron-webauthn is only available on macOS. Install @electron-webauthn/macos on Darwin hosts."
@@ -114,15 +128,38 @@ export async function getCredential(
   return module.getCredential(publicKeyOptions, additionalOptions);
 }
 
+export async function getListPasskeyAuthorizationStatus(): Promise<
+  PasskeyAuthorizationResult | PasskeyAuthorizationError
+> {
+  const module = await getMacosModule();
+  if (!module) {
+    return unsupportedPasskeyAuthorizationResult;
+  }
+
+  return module.getListPasskeyAuthorizationStatus();
+}
+
+export async function requestListPasskeyAuthorization(): Promise<
+  PasskeyAuthorizationResult | PasskeyAuthorizationError
+> {
+  const module = await getMacosModule();
+  if (!module) {
+    return unsupportedPasskeyAuthorizationResult;
+  }
+
+  return module.requestListPasskeyAuthorization();
+}
+
 export async function listPasskeys(
-  relyingPartyId: string
+  relyingPartyId: string,
+  options?: ListPasskeysOptions
 ): Promise<ListPasskeysResult | ListPasskeysError> {
   const module = await getMacosModule();
   if (!module) {
     return unsupportedListResult;
   }
 
-  return module.listPasskeys(relyingPartyId);
+  return module.listPasskeys(relyingPartyId, options);
 }
 
 export function __setMacosLoaderForTesting(loader: MacosLoader | null) {

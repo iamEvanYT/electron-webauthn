@@ -93,6 +93,25 @@ export interface PasskeyCredential {
   userHandle: string;
 }
 
+export type PasskeyAuthorizationStatus =
+  | "authorized"
+  | "denied"
+  | "notDetermined";
+
+export interface PasskeyAuthorizationResult {
+  success: true;
+  status: PasskeyAuthorizationStatus;
+}
+
+export interface PasskeyAuthorizationError {
+  success: false;
+  error: Error;
+}
+
+export interface ListPasskeysOptions {
+  requestAuthorization?: boolean;
+}
+
 export interface ListPasskeysResult {
   success: true;
   credentials: PasskeyCredential[];
@@ -126,7 +145,14 @@ export interface WebauthnModule {
     publicKeyOptions: PublicKeyCredentialRequestOptions | undefined,
     additionalOptions: WebauthnGetRequestOptions
   ): Promise<GetCredentialResult>;
+  getListPasskeyAuthorizationStatus(): Promise<
+    PasskeyAuthorizationResult | PasskeyAuthorizationError
+  >;
+  requestListPasskeyAuthorization(): Promise<
+    PasskeyAuthorizationResult | PasskeyAuthorizationError
+  >;
   listPasskeys(
-    relyingPartyId: string
+    relyingPartyId: string,
+    options?: ListPasskeysOptions
   ): Promise<ListPasskeysResult | ListPasskeysError>;
 }

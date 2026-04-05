@@ -71,7 +71,39 @@ interface CreateCredentialErrorResult {
 }
 ```
 
-## `listPasskeys(relyingPartyId)`
+## `getListPasskeyAuthorizationStatus()`
+
+Returns the current passkey-listing permission state without triggering the macOS authorization prompt.
+
+### Returns
+
+`Promise<PasskeyAuthorizationResult | PasskeyAuthorizationError>`
+
+### Result Types
+
+```typescript
+type PasskeyAuthorizationStatus = "authorized" | "denied" | "notDetermined";
+
+type PasskeyAuthorizationResult = {
+  success: true;
+  status: PasskeyAuthorizationStatus;
+};
+
+type PasskeyAuthorizationError = {
+  success: false;
+  error: Error;
+};
+```
+
+## `requestListPasskeyAuthorization()`
+
+Requests passkey-listing permission if the current state is `notDetermined`. If the user has already granted or denied permission, this returns the current status without re-prompting.
+
+### Returns
+
+`Promise<PasskeyAuthorizationResult | PasskeyAuthorizationError>`
+
+## `listPasskeys(relyingPartyId, options?)`
 
 Lists all platform passkeys stored on the device for a given relying party.
 
@@ -83,6 +115,13 @@ On first call, macOS will prompt the user to grant your app access to stored pas
 ### Parameters
 
 - **`relyingPartyId: string`** (required) - The relying party identifier (e.g., `"example.com"`)
+- **`options?: ListPasskeysOptions`** - Optional listing behavior
+
+```typescript
+interface ListPasskeysOptions {
+  requestAuthorization?: boolean; // Defaults to true
+}
+```
 
 ### Returns
 
@@ -102,9 +141,9 @@ type ListPasskeysError = {
 };
 
 interface PasskeyCredential {
-  id: string;         // Base64url-encoded credential ID
-  rpId: string;       // The relying party identifier
-  userName: string;   // The user name associated with the credential
+  id: string; // Base64url-encoded credential ID
+  rpId: string; // The relying party identifier
+  userName: string; // The user name associated with the credential
   userHandle: string; // Base64url-encoded user handle
 }
 ```
@@ -113,6 +152,7 @@ interface PasskeyCredential {
 
 - **Unsupported OS**: Throws if the current macOS version is below 13.3
 - **Permission denied**: Throws if the user denied access in the system permission dialog
+- **Permission not determined**: Throws if `requestAuthorization` is `false` and the app has not requested permission yet
 - **Missing entitlement**: The `com.apple.developer.web-browser.public-key-credential` entitlement must be present
 
 ---
