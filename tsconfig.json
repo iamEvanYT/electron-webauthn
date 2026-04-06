@@ -4,7 +4,7 @@
     "target": "ESNext",
     "module": "Node16",
     "moduleDetection": "force",
-    "baseUrl": ".",
+    "types": ["@types/bun"],
     "paths": {
       "@electron-webauthn/types": ["./packages/types/index.d.ts"]
     },
