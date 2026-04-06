@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.0] - 2026-04-06
+
+- feat: add `getListPasskeyAuthorizationStatus` and `requestListPasskeyAuthorization` utilities.
+- chore: bump dependencies
+
 ## [1.2.0] - 2026-02-25
 
 - fix: split package into cross-platform `electron-webauthn` shim + darwin-only `@electron-webauthn/macos` implementation to prevent Linux/Bun/electron-builder packaging failures from macOS native dependencies.
