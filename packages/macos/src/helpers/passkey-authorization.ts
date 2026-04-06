@@ -8,6 +8,7 @@ import {
   ASAuthorizationWebBrowserPublicKeyCredentialManagerAuthorizationState,
   type _ASAuthorizationWebBrowserPublicKeyCredentialManager,
 } from "objcjs-types/AuthenticationServices";
+import { requestAuthorizationForPublicKeyCredentials$Block } from "objcjs-types/AuthenticationServices/blocks";
 
 export interface ResolvePasskeyAuthorizationOptions {
   requestIfNeeded: boolean;
@@ -47,9 +48,12 @@ async function requestAuthorization(
   manager: _ASAuthorizationWebBrowserPublicKeyCredentialManager
 ): Promise<PasskeyAuthorizationStatus> {
   const rawState = await new Promise<number>((resolve) => {
-    manager.requestAuthorizationForPublicKeyCredentials$((nextState) => {
-      resolve(nextState as number);
-    });
+    const block = requestAuthorizationForPublicKeyCredentials$Block(
+      (nextState) => {
+        resolve(nextState);
+      }
+    );
+    manager.requestAuthorizationForPublicKeyCredentials$(block);
   });
 
   return normalizeAuthorizationStatus(rawState);

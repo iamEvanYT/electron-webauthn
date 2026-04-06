@@ -12,6 +12,7 @@ import {
   type _ASAuthorizationWebBrowserPlatformPublicKeyCredential,
   type _ASAuthorizationWebBrowserPublicKeyCredentialManager,
 } from "objcjs-types/AuthenticationServices";
+import { platformCredentialsForRelyingParty$completionHandler$Block } from "objcjs-types/AuthenticationServices/blocks";
 import type {
   ListPasskeysError,
   ListPasskeysOptions,
@@ -42,11 +43,14 @@ async function getPlatformCredentials(
   );
 
   return new Promise<any>((resolve) => {
-    manager.platformCredentialsForRelyingParty$completionHandler$(
-      rpIdString,
+    const block = platformCredentialsForRelyingParty$completionHandler$Block(
       (credentialsArray) => {
         resolve(credentialsArray);
       }
+    );
+    manager.platformCredentialsForRelyingParty$completionHandler$(
+      rpIdString,
+      block
     );
   });
 }
