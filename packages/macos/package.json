@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "objcjs-types": "0.7.2"
+    "objcjs-types": "0.8.0"
   },
   "peerDependencies": {
     "typescript": "^6.0.2"
@@ -38,7 +38,7 @@
   "dependencies": {
     "@electron-webauthn/types": "^1.2.0",
     "@oslojs/webauthn": "^1.0.0",
-    "objc-js": "^1.4.0"
+    "objc-js": "^1.5.0"
   },
   "trustedDependencies": [
     "objc-js"
