@@ -1,6 +1,6 @@
 {
   "name": "@electron-webauthn/macos",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "repository": "https://github.com/iamEvanYT/electron-webauthn.git",
   "homepage": "https://github.com/iamEvanYT/electron-webauthn#readme",
   "description": "macOS implementation package for electron-webauthn.",
