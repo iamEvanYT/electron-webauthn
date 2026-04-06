@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.1] - 2026-04-06
+
+- chore: bump dependencies.
+- fix: use block wrappers for `platformCredentialsForRelyingParty$completionHandler$` and `requestAuthorizationForPublicKeyCredentials$` to improve reliability.
+
 ## [1.3.0] - 2026-04-06
 
 - feat: add `getListPasskeyAuthorizationStatus` and `requestListPasskeyAuthorization` utilities.
