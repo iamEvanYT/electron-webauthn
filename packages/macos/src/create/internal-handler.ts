@@ -314,14 +314,6 @@ function createCredentialInternal(
   const { clientDataHash, clientDataBuffer } =
     generateClientDataInfo(clientData);
 
-  setControllerState(
-    authController,
-    clientDataHash,
-    supportedAlgorithmIdentifiers,
-    residentKeyRequired,
-    excludeCredentials
-  );
-
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
@@ -333,6 +325,23 @@ function createCredentialInternal(
       timeoutHandlerId = null;
     }
   };
+  const failConfiguration = (error: unknown) => {
+    if (isFinished) return;
+    reject(error instanceof Error ? error : new Error(String(error)));
+    finished(false);
+    try {
+      authController.cancel();
+    } catch {}
+  };
+
+  setControllerState(
+    authController,
+    clientDataHash,
+    supportedAlgorithmIdentifiers,
+    residentKeyRequired,
+    excludeCredentials,
+    failConfiguration
+  );
 
   // authController.delegate = self
   const delegate = createDelegate("ASAuthorizationControllerDelegate", {
@@ -449,7 +458,13 @@ function createCredentialInternal(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
-  authController.performRequests();
+  try {
+    authController.performRequests();
+  } catch (error) {
+    failConfiguration(error);
+  }
+
+  if (isFinished) return promise;
 
   // Cancelling auth controller on timeout
   timeoutHandlerId = setTimeout(() => {

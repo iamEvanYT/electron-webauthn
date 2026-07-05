@@ -258,8 +258,6 @@ function getCredentialInternal(
   const { clientDataHash, clientDataBuffer } =
     generateClientDataInfo(clientData);
 
-  setClientDataHash(authController, clientDataHash);
-
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
@@ -271,6 +269,16 @@ function getCredentialInternal(
       timeoutHandlerId = null;
     }
   };
+  const failConfiguration = (error: unknown) => {
+    if (isFinished) return;
+    reject(error instanceof Error ? error : new Error(String(error)));
+    finished(false);
+    try {
+      authController.cancel();
+    } catch {}
+  };
+
+  setClientDataHash(authController, clientDataHash, failConfiguration);
 
   // Set allowed credentials if provided
   if (allowedCredentialIds.length > 0) {
@@ -373,7 +381,13 @@ function getCredentialInternal(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
-  authController.performRequests();
+  try {
+    authController.performRequests();
+  } catch (error) {
+    failConfiguration(error);
+  }
+
+  if (isFinished) return promise;
 
   // Cancelling auth controller on timeout
   timeoutHandlerId = setTimeout(() => {

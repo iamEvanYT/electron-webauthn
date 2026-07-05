@@ -2,15 +2,27 @@ import { NobjcClass, NobjcObject, getPointer } from "objc-js";
 import type { ASAuthorizationController } from "objcjs-types/AuthenticationServices";
 import { NSDataFromBuffer } from "objcjs-types/nsdata";
 
-const getControllerState = new Map<string, Buffer>();
+interface GetControllerState {
+  clientDataHash: Buffer;
+  onConfigurationError: (error: unknown) => void;
+}
+
+const getControllerState = new Map<string, GetControllerState>();
 
 function getObjectPointerString(self: NobjcObject) {
   return getPointer(self).toString("base64");
 }
 
-export function setClientDataHash(self: NobjcObject, clientDataHash: Buffer) {
+export function setClientDataHash(
+  self: NobjcObject,
+  clientDataHash: Buffer,
+  onConfigurationError: (error: unknown) => void
+) {
   const selfPointer = getObjectPointerString(self);
-  getControllerState.set(selfPointer, clientDataHash);
+  getControllerState.set(selfPointer, {
+    clientDataHash,
+    onConfigurationError,
+  });
 }
 
 export function removeClientDataHash(self: NobjcObject) {
@@ -22,7 +34,11 @@ export const WebauthnGetController = NobjcClass.define({
   name: "WebauthnGetController",
   superclass: "ASAuthorizationController",
   methods: {
-    // This overrides the default implementation of _requestContextWithRequests$error$ to allow us to set the clientDataHash on the assertion options
+    // Overrides _requestContextWithRequests$error$ to inject our clientDataHash into BOTH
+    // platform and security-key assertion options. Previously only the platform variant was
+    // mutated (with security-key used as a fallback), so security-key get requests signed
+    // a clientDataJSON that didn't match what we returned to the page and the relying party
+    // couldn't verify the assertion.
     _requestContextWithRequests$error$: {
       types: "@@:@^@",
       implementation: (self: any, requests: any, outError: any) => {
@@ -33,21 +49,39 @@ export const WebauthnGetController = NobjcClass.define({
           outError
         );
 
-        // Grab the assertion options, set the client data hash, and set a copy of the assertion options back on the context
         const selfPointer = getObjectPointerString(self);
-        if (getControllerState.has(selfPointer)) {
-          let assertionOptions =
-            context.platformKeyCredentialAssertionOptions();
-          if (!assertionOptions) {
-            assertionOptions = context.securityKeyCredentialAssertionOptions();
+        const state = getControllerState.get(selfPointer);
+        if (state) {
+          const { clientDataHash, onConfigurationError } = state;
+
+          try {
+            const platformOptions =
+              context.platformKeyCredentialAssertionOptions();
+            if (platformOptions) {
+              platformOptions.setClientDataHash$(
+                NSDataFromBuffer(clientDataHash)
+              );
+              context.setPlatformKeyCredentialAssertionOptions$(
+                platformOptions.copyWithZone$(null)
+              );
+            }
+
+            // Mirror on security-key options. These selectors are private, so fail the
+            // ceremony if either is unavailable rather than leaving an unpatched request
+            // active with a clientDataHash that does not match the returned clientDataJSON.
+            const securityKeyOptions =
+              context.securityKeyCredentialAssertionOptions();
+            if (securityKeyOptions) {
+              securityKeyOptions.setClientDataHash$(
+                NSDataFromBuffer(clientDataHash)
+              );
+              context.setSecurityKeyCredentialAssertionOptions$(
+                securityKeyOptions.copyWithZone$(null)
+              );
+            }
+          } catch (error) {
+            onConfigurationError(error);
           }
-
-          const clientDataHash = getControllerState.get(selfPointer);
-          assertionOptions.setClientDataHash$(NSDataFromBuffer(clientDataHash));
-
-          context.setPlatformKeyCredentialAssertionOptions$(
-            assertionOptions.copyWithZone$(null)
-          );
         }
 
         return context;
