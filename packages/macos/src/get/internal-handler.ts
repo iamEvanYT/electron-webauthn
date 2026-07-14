@@ -11,6 +11,7 @@ import {
 } from "../helpers/client-data.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import type { AuthenticatorAttachment } from "../helpers/types.js";
+import { NativeError } from "../helpers/validation.js";
 import { NSStringFromString } from "objcjs-types/helpers";
 import {
   ASAuthorizationPlatformPublicKeyCredentialProvider,
@@ -364,10 +365,7 @@ function getCredentialInternal(
       finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      const errorMessage = error.localizedDescription().UTF8String();
-      // console.error("Authorization failed:", errorMessage);
-
-      reject(new Error(errorMessage));
+      reject(NativeError.fromNSError(error));
       finished(false);
     },
   });
@@ -389,7 +387,7 @@ function getCredentialInternal(
 
   if (isFinished) return promise;
 
-  // Cancelling auth controller on timeout
+  // A ceremony timeout and user cancellation both map to WebAuthn's NotAllowedError.
   timeoutHandlerId = setTimeout(() => {
     if (isFinished) return;
     authController.cancel();

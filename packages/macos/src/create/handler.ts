@@ -2,7 +2,12 @@ import type { UserVerificationPreference } from "../get/internal-handler.js";
 import { bufferSourceToBuffer, bufferToBase64Url } from "../helpers/index.js";
 import type { PRFInput } from "../helpers/prf.js";
 import { isRpIdAllowedForOrigin } from "../helpers/rpid.js";
-import { isNumber, isObject, isString } from "../helpers/validation.js";
+import {
+  isNumber,
+  isObject,
+  isString,
+  mapNativeAuthorizationError,
+} from "../helpers/validation.js";
 import type {
   CreateCredentialResult,
   CreateCredentialSuccessData,
@@ -108,7 +113,7 @@ export async function createCredential(
     // 1 hour (max timeout)
     timeout = 60 * 60 * 1000;
   }
-  // TODO: Handle timeout
+  // Timeout is enforced inside createCredentialInternal and surfaces as NotAllowedError.
 
   const challenge = bufferSourceToBuffer(publicKeyOptions.challenge);
   if (!challenge) {
@@ -247,19 +252,7 @@ export async function createCredential(
     }
   ).catch((error: Error) => {
     errorResult = error;
-    // console.error("Error creating credential", error);
-    if (
-      error.message.includes(
-        "(com.apple.AuthenticationServices.AuthorizationError error 1006.)"
-      )
-    ) {
-      // MatchedExcludedCredential
-      return "InvalidStateError";
-    }
-    if (error.message.startsWith("The operation couldn’t be completed.")) {
-      return "NotAllowedError";
-    }
-    return null;
+    return mapNativeAuthorizationError(error);
   });
 
   if (typeof result === "string") {

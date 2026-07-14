@@ -106,7 +106,7 @@ export async function getCredential(
     // 1 hour (max timeout)
     timeout = 60 * 60 * 1000;
   }
-  // TODO: Handle timeout
+  // Timeout is enforced inside getCredentialInternal and surfaces as NotAllowedError.
 
   const challenge = bufferSourceToBuffer(publicKeyOptions.challenge);
   if (!challenge) {
@@ -167,10 +167,8 @@ export async function getCredential(
     }
   ).catch((error: Error) => {
     errorResult = error;
-    // console.error("Error getting credential", error);
-    if (error.message.startsWith("The operation couldn’t be completed.")) {
-      return "NotAllowedError";
-    }
+    // get() has no InvalidStateError. Native failures, including ceremony timeout and
+    // user cancellation, surface as NotAllowedError.
     return "NotAllowedError" as const;
   });
 
