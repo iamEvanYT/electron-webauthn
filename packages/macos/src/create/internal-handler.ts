@@ -42,7 +42,7 @@ export interface CreateCredentialResult {
   attestationObject: Buffer;
   authenticatorData: Buffer;
   attachment: AuthenticatorAttachment;
-  transports: string[];
+  transports: AuthenticatorTransport[];
   isResidentKey: boolean;
   publicKeyAlgorithm: number;
   publicKey: Buffer;
@@ -351,100 +351,113 @@ function createCredentialInternal(
       _,
       authorization
     ) => {
-      const credential = authorization.credential();
-      console.log("Authorization succeeded:", credential);
+      // Wrapped in try/catch: without this, a parsing/encoding error below (e.g. an
+      // unsupported COSE key algorithm) would leave the returned promise pending
+      // forever, since neither resolve/reject nor finished() would otherwise run.
+      try {
+        const credential = authorization.credential();
 
-      const isPlatform =
-        credential instanceof
-        ASAuthorizationPlatformPublicKeyCredentialRegistration;
-      const isSecurityKey =
-        credential instanceof
-        ASAuthorizationSecurityKeyPublicKeyCredentialRegistration;
-      if (!isPlatform && !isSecurityKey) {
-        reject(
-          new Error(
-            "Resulting credential is not a platform or security key credential"
-          )
+        const isPlatform =
+          credential instanceof
+          ASAuthorizationPlatformPublicKeyCredentialRegistration;
+        const isSecurityKey =
+          credential instanceof
+          ASAuthorizationSecurityKeyPublicKeyCredentialRegistration;
+        if (!isPlatform && !isSecurityKey) {
+          reject(
+            new Error(
+              "Resulting credential is not a platform or security key credential"
+            )
+          );
+          finished(false);
+          return;
+        }
+
+        const credentialIdBuffer = bufferFromNSDataDirect(
+          credential.credentialID()
         );
+
+        const attestationObjectBuffer = bufferFromNSDataDirect(
+          credential.rawAttestationObject()
+        );
+        const attestation = parseAttestationObject(attestationObjectBuffer);
+
+        const publicKey = attestation.authenticatorData.credential.publicKey;
+
+        // Encode the public key to DER-encoded SubjectPublicKeyInfo (SPKI) format
+        const ec2Key = publicKey.ec2();
+        const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
+
+        // Must be the raw authData bytes (not the parsed object) - the relying
+        // party server re-verifies this exact byte sequence against the signature.
+        const authenticatorData = extractRawAuthenticatorData(
+          attestationObjectBuffer
+        );
+
+        let authenticatorAttachment: AuthenticatorAttachment =
+          "cross-platform";
+        if (
+          isPlatform &&
+          credential.attachment() ===
+            ASAuthorizationPublicKeyCredentialAttachment.Platform
+        ) {
+          authenticatorAttachment = "platform";
+        }
+
+        let isLargeBlobSupported: boolean | null = null;
+        if (enabledExtensions.includes("largeBlob")) {
+          const largeBlobOutput = credential.largeBlob();
+          if (largeBlobOutput) {
+            isLargeBlobSupported = largeBlobOutput.isSupported();
+          }
+        }
+
+        let prfFirst: Buffer | null = null;
+        let prfSecond: Buffer | null = null;
+        let isPRFSupported: boolean | null = null;
+        if (enabledExtensions.includes("prf")) {
+          const prfOutput = credential.prf();
+          if (prfOutput) {
+            const prfFirstData = prfOutput.first();
+            const prfSecondData = prfOutput.second();
+            if (prfFirstData) {
+              prfFirst = bufferFromNSDataDirect(prfFirstData);
+            }
+            if (prfSecondData) {
+              prfSecond = bufferFromNSDataDirect(prfSecondData);
+            }
+
+            isPRFSupported = prfOutput.isSupported();
+          }
+        }
+
+        // Apple platform authenticators (Touch ID/Face ID) always create discoverable
+        // (resident) passkeys; for security keys we can only report back what we asked for,
+        // since the API doesn't expose whether the authenticator actually honored it.
+        const isResidentKey = isPlatform || residentKeyRequired;
+
+        const data: CreateCredentialResult = {
+          credentialId: credentialIdBuffer,
+          clientDataJSON: clientDataBuffer,
+          attestationObject: attestationObjectBuffer,
+          authenticatorData,
+          attachment: authenticatorAttachment,
+          transports: authenticatorAttachment === "platform" ? ["internal"] : [],
+          isResidentKey,
+          publicKeyAlgorithm: publicKey.algorithm(),
+          publicKey: publicKeySPKI,
+          isLargeBlobSupported,
+          isPRFSupported,
+          prfFirst,
+          prfSecond,
+        };
+        resolve(data);
+
+        finished(true);
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
         finished(false);
-        return;
       }
-
-      const credentialIdBuffer = bufferFromNSDataDirect(
-        credential.credentialID()
-      );
-
-      const attestationObjectBuffer = bufferFromNSDataDirect(
-        credential.rawAttestationObject()
-      );
-      const attestation = parseAttestationObject(attestationObjectBuffer);
-
-      const publicKey = attestation.authenticatorData.credential.publicKey;
-
-      // Encode the public key to DER-encoded SubjectPublicKeyInfo (SPKI) format
-      const ec2Key = publicKey.ec2();
-      const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
-
-      // Must be the raw authData bytes (not the parsed object) - the relying
-      // party server re-verifies this exact byte sequence against the signature.
-      const authenticatorData = extractRawAuthenticatorData(
-        attestationObjectBuffer
-      );
-
-      let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
-      if (
-        isPlatform &&
-        credential.attachment() ===
-          ASAuthorizationPublicKeyCredentialAttachment.Platform
-      ) {
-        authenticatorAttachment = "platform";
-      }
-
-      let isLargeBlobSupported: boolean | null = null;
-      if (enabledExtensions.includes("largeBlob")) {
-        const largeBlobOutput = credential.largeBlob();
-        if (largeBlobOutput) {
-          isLargeBlobSupported = largeBlobOutput.isSupported();
-        }
-      }
-
-      let prfFirst: Buffer | null = null;
-      let prfSecond: Buffer | null = null;
-      let isPRFSupported: boolean | null = null;
-      if (enabledExtensions.includes("prf")) {
-        const prfOutput = credential.prf();
-        if (prfOutput) {
-          const prfFirstData = prfOutput.first();
-          const prfSecondData = prfOutput.second();
-          if (prfFirstData) {
-            prfFirst = bufferFromNSDataDirect(prfFirstData);
-          }
-          if (prfSecondData) {
-            prfSecond = bufferFromNSDataDirect(prfSecondData);
-          }
-
-          isPRFSupported = prfOutput.isSupported();
-        }
-      }
-
-      const data: CreateCredentialResult = {
-        credentialId: credentialIdBuffer,
-        clientDataJSON: clientDataBuffer,
-        attestationObject: attestationObjectBuffer,
-        authenticatorData,
-        attachment: authenticatorAttachment,
-        transports: ["hybrid", "internal"],
-        isResidentKey: true,
-        publicKeyAlgorithm: publicKey.algorithm(),
-        publicKey: publicKeySPKI,
-        isLargeBlobSupported,
-        isPRFSupported,
-        prfFirst,
-        prfSecond,
-      };
-      resolve(data);
-
-      finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
       reject(NativeError.fromNSError(error));

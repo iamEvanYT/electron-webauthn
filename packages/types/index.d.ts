@@ -6,14 +6,15 @@ export type GetCredentialErrorCodes =
 
 export interface GetCredentialSuccessData {
   credentialId: string;
+  authenticatorAttachment: AuthenticatorAttachment;
   clientDataJSON: string;
   authenticatorData: string;
   signature: string;
   userHandle: string;
-  extensions?: {
+  extensions: {
     prf?: {
-      results?: {
-        first: string;
+      results: {
+        first?: string;
         second?: string;
       };
     };
@@ -48,25 +49,27 @@ export type CreateCredentialErrorCodes =
 
 export interface CreateCredentialSuccessData {
   credentialId: string;
+  authenticatorAttachment: AuthenticatorAttachment;
   clientDataJSON: string;
   attestationObject: string;
   authData: string;
   publicKey: string;
   publicKeyAlgorithm: number;
-  transports: string[];
+  transports: AuthenticatorTransport[];
   extensions: {
     credProps?: {
       rk: boolean;
     };
     prf?: {
-      enabled?: boolean;
+      // `enabled` is an electron-webauthn extension (W3C AuthenticationExtensionsPRFOutputs only has `results`): signals PRF capability on the created credential.
+      enabled: boolean;
       results: {
         first?: string;
         second?: string;
       };
     };
     largeBlob?: {
-      supported?: boolean;
+      supported: boolean;
     };
   };
 }

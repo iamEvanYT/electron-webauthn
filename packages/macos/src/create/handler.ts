@@ -87,7 +87,7 @@ export async function createCredential(
 ): Promise<CreateCredentialResult> {
   // Check all the arguments
   if (!publicKeyOptions) {
-    return null;
+    return { success: false, error: "TypeError" };
   }
 
   const rpInfo = publicKeyOptions.rp;
@@ -247,6 +247,7 @@ export async function createCredential(
     userVerificationPreference,
     {
       topFrameOrigin,
+      userDisplayName,
       largeBlobSupport,
       prf,
     }
@@ -261,6 +262,7 @@ export async function createCredential(
 
   const data: CreateCredentialSuccessData = {
     credentialId: bufferToBase64Url(result.credentialId),
+    authenticatorAttachment: result.attachment,
     clientDataJSON: bufferToBase64Url(result.clientDataJSON),
     attestationObject: bufferToBase64Url(result.attestationObject),
     authData: bufferToBase64Url(result.authenticatorData),

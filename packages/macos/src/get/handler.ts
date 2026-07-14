@@ -90,7 +90,7 @@ export async function getCredential(
 ): Promise<GetCredentialResult> {
   // Check all the arguments
   if (!publicKeyOptions) {
-    return null;
+    return { success: false, error: "TypeError" };
   }
 
   const rpId = publicKeyOptions.rpId;
@@ -179,6 +179,7 @@ export async function getCredential(
 
   const data: GetCredentialSuccessData = {
     credentialId: bufferToBase64Url(result.id),
+    authenticatorAttachment: result.authenticatorAttachment,
     clientDataJSON: bufferToBase64Url(result.clientDataJSON),
     authenticatorData: bufferToBase64Url(result.authenticatorData),
     signature: bufferToBase64Url(result.signature),
@@ -188,17 +189,18 @@ export async function getCredential(
 
   // Add PRF extension results if available
   if (result.prf && (result.prf[0] || result.prf[1])) {
-    data.extensions!.prf = {
+    data.extensions.prf = {
       results: {
-        first: bufferToBase64Url(result.prf[0]!),
+        first: result.prf[0] ? bufferToBase64Url(result.prf[0]) : undefined,
         second: result.prf[1] ? bufferToBase64Url(result.prf[1]) : undefined,
       },
     };
   }
 
   // Add largeBlob extension results if available
-  if (result.largeBlob || result.largeBlobWritten) {
-    data.extensions!.largeBlob = {
+  if (result.largeBlob || result.largeBlobWritten !== null) {
+    // `false` is a meaningful failed-write result, not "extension absent".
+    data.extensions.largeBlob = {
       blob: result.largeBlob ? bufferToBase64Url(result.largeBlob) : undefined,
       written:
         result.largeBlobWritten !== null ? result.largeBlobWritten : undefined,
