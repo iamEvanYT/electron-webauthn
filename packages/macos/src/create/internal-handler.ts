@@ -2,6 +2,7 @@ import { generateClientDataInfo } from "../helpers/client-data.js";
 import { generateWebauthnClientData } from "../helpers/client-data.js";
 import { PromiseWithResolvers } from "../helpers/index.js";
 import { encodeEC2PublicKeyToSPKI } from "../helpers/public-key.js";
+import { extractRawAuthenticatorData } from "../helpers/attestation.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import { createPRFInput, type PRFInput } from "../helpers/prf.js";
 import {
@@ -383,8 +384,10 @@ function createCredentialInternal(
       const ec2Key = publicKey.ec2();
       const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
 
-      const authenticatorData = Buffer.from(
-        JSON.stringify(attestation.authenticatorData)
+      // Must be the raw authData bytes (not the parsed object) - the relying
+      // party server re-verifies this exact byte sequence against the signature.
+      const authenticatorData = extractRawAuthenticatorData(
+        attestationObjectBuffer
       );
 
       let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
