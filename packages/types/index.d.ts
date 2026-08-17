@@ -10,7 +10,7 @@ export interface GetCredentialSuccessData {
   clientDataJSON: string;
   authenticatorData: string;
   signature: string;
-  userHandle: string;
+  userHandle: string | null;
   extensions: {
     prf?: {
       results: {

@@ -319,6 +319,9 @@ function createCredentialInternal(
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    if (isFinished) {
+      return;
+    }
     isFinished = true;
     removeControllerState(authController);
 
@@ -328,7 +331,9 @@ function createCredentialInternal(
     }
   };
   const failConfiguration = (error: unknown) => {
-    if (isFinished) return;
+    if (isFinished) {
+      return;
+    }
     reject(error instanceof Error ? error : new Error(String(error)));
     finished(false);
     try {
@@ -351,9 +356,10 @@ function createCredentialInternal(
       _,
       authorization
     ) => {
-      // Wrapped in try/catch: without this, a parsing/encoding error below (e.g. an
-      // unsupported COSE key algorithm) would leave the returned promise pending
-      // forever, since neither resolve/reject nor finished() would otherwise run.
+      if (isFinished) {
+        return;
+      }
+      // Without try/catch, a throw here is swallowed by objc-js and the promise hangs.
       try {
         const credential = authorization.credential();
 
@@ -364,12 +370,11 @@ function createCredentialInternal(
           credential instanceof
           ASAuthorizationSecurityKeyPublicKeyCredentialRegistration;
         if (!isPlatform && !isSecurityKey) {
-          reject(
+          failConfiguration(
             new Error(
               "Resulting credential is not a platform or security key credential"
             )
           );
-          finished(false);
           return;
         }
 
@@ -455,13 +460,15 @@ function createCredentialInternal(
 
         finished(true);
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)));
-        finished(false);
+        failConfiguration(error);
       }
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      reject(NativeError.fromNSError(error));
-      finished(false);
+      try {
+        failConfiguration(NativeError.fromNSError(error));
+      } catch (callbackError) {
+        failConfiguration(callbackError);
+      }
     },
   });
   authController.setDelegate$(delegate);
@@ -480,10 +487,9 @@ function createCredentialInternal(
 
   if (isFinished) return promise;
 
-  // A ceremony timeout and user cancellation both map to WebAuthn's NotAllowedError.
+  // After Apple already completed, cancel() is a no-op and will not reject.
   timeoutHandlerId = setTimeout(() => {
-    if (isFinished) return;
-    authController.cancel();
+    failConfiguration(new Error("The operation timed out."));
   }, timeout);
 
   return promise;

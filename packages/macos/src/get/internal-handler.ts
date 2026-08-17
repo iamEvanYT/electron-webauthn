@@ -61,7 +61,7 @@ export interface GetCredentialResult {
   clientDataJSON: Buffer;
   authenticatorData: Buffer;
   signature: Buffer;
-  userHandle: Buffer;
+  userHandle: Buffer | null;
   prf: [Buffer | null, Buffer | null];
   largeBlob: Buffer | null;
   largeBlobWritten: boolean | null;
@@ -77,6 +77,15 @@ export interface GetCredentialAdditionalOptions {
 
   // iframes handling
   topFrameOrigin?: string;
+}
+
+function bufferFromOptionalNSData(
+  data: _NSData | null | undefined
+): Buffer | null {
+  if (data == null) {
+    return null;
+  }
+  return bufferFromNSDataDirect(data);
 }
 
 function setupPublicKeyCredentialRequest(
@@ -263,6 +272,9 @@ function getCredentialInternal(
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    if (isFinished) {
+      return;
+    }
     isFinished = true;
     removeClientDataHash(authController);
 
@@ -272,7 +284,9 @@ function getCredentialInternal(
     }
   };
   const failConfiguration = (error: unknown) => {
-    if (isFinished) return;
+    if (isFinished) {
+      return;
+    }
     reject(error instanceof Error ? error : new Error(String(error)));
     finished(false);
     try {
@@ -312,9 +326,10 @@ function getCredentialInternal(
       _,
       authorization
     ) => {
-      // Wrapped in try/catch: without this, an unexpected error below would leave the
-      // returned promise pending forever, since neither resolve/reject nor finished()
-      // would otherwise run.
+      if (isFinished) {
+        return;
+      }
+      // Without try/catch, a throw here is swallowed by objc-js and the promise hangs.
       try {
         const credential = authorization.credential();
 
@@ -325,12 +340,11 @@ function getCredentialInternal(
           credential instanceof
           ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
         if (!isPlatform && !isSecurityKey) {
-          reject(
+          failConfiguration(
             new Error(
               "Resulting credential is not a platform or security key credential"
             )
           );
-          finished(false);
           return;
         }
 
@@ -347,18 +361,37 @@ function getCredentialInternal(
           authenticatorAttachment = "platform";
         }
 
-        const prf = credential.prf();
-        const prfFirst = prf?.first ? prf.first() : null;
-        const prfSecond = prf?.second ? prf.second() : null;
+        // Security-key assertions often throw if prf/largeBlob were never requested.
+        let prfFirst: Buffer | null = null;
+        let prfSecond: Buffer | null = null;
+        if (enabledExtensions.includes("prf")) {
+          const prfOutput = credential.prf();
+          if (prfOutput) {
+            const prfFirstData = prfOutput.first();
+            const prfSecondData = prfOutput.second();
+            if (prfFirstData) {
+              prfFirst = bufferFromNSDataDirect(prfFirstData);
+            }
+            if (prfSecondData) {
+              prfSecond = bufferFromNSDataDirect(prfSecondData);
+            }
+          }
+        }
 
         let largeBlobBuffer: Buffer | null = null;
         let largeBlobWritten: boolean | null = null;
-        if (credential.largeBlob()) {
-          const largeBlobData = credential.largeBlob().readData();
-          if (largeBlobData) {
-            largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
-          } else {
-            largeBlobWritten = credential.largeBlob().didWrite();
+        if (
+          enabledExtensions.includes("largeBlobRead") ||
+          enabledExtensions.includes("largeBlobWrite")
+        ) {
+          const largeBlobOutput = credential.largeBlob();
+          if (largeBlobOutput) {
+            const largeBlobData = largeBlobOutput.readData();
+            if (largeBlobData) {
+              largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
+            } else {
+              largeBlobWritten = largeBlobOutput.didWrite();
+            }
           }
         }
 
@@ -370,24 +403,23 @@ function getCredentialInternal(
             credential.rawAuthenticatorData()
           ),
           signature: bufferFromNSDataDirect(credential.signature()),
-          userHandle: bufferFromNSDataDirect(credential.userID()),
-          prf: [
-            prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
-            prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
-          ],
+          userHandle: bufferFromOptionalNSData(credential.userID()),
+          prf: [prfFirst, prfSecond],
           largeBlob: largeBlobBuffer,
           largeBlobWritten,
         });
 
         finished(true);
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)));
-        finished(false);
+        failConfiguration(error);
       }
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      reject(NativeError.fromNSError(error));
-      finished(false);
+      try {
+        failConfiguration(NativeError.fromNSError(error));
+      } catch (callbackError) {
+        failConfiguration(callbackError);
+      }
     },
   });
   authController.setDelegate$(delegate);
@@ -408,10 +440,9 @@ function getCredentialInternal(
 
   if (isFinished) return promise;
 
-  // A ceremony timeout and user cancellation both map to WebAuthn's NotAllowedError.
+  // After Apple already completed, cancel() is a no-op and will not reject.
   timeoutHandlerId = setTimeout(() => {
-    if (isFinished) return;
-    authController.cancel();
+    failConfiguration(new Error("The operation timed out."));
   }, timeout);
 
   return promise;

@@ -183,7 +183,9 @@ export async function getCredential(
     clientDataJSON: bufferToBase64Url(result.clientDataJSON),
     authenticatorData: bufferToBase64Url(result.authenticatorData),
     signature: bufferToBase64Url(result.signature),
-    userHandle: bufferToBase64Url(result.userHandle),
+    userHandle: result.userHandle
+      ? bufferToBase64Url(result.userHandle)
+      : null,
     extensions: {},
   };
 
