@@ -33,10 +33,16 @@
     "objcjs-types": "0.8.0"
   },
   "peerDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@electron-webauthn/types": "^1.2.0",
+    "@oslojs/cbor": "^1.0.0",
     "@oslojs/webauthn": "^1.0.0",
     "objc-js": "^1.5.0"
   },

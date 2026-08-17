@@ -196,7 +196,7 @@ interface GetCredentialSuccessResult {
     clientDataJSON: string; // Base64url-encoded client data
     authenticatorData: string; // Base64url-encoded authenticator data
     signature: string; // Base64url-encoded signature
-    userHandle: string; // Base64url-encoded user handle
+    userHandle: string | null; // Base64url-encoded user handle; null if the authenticator omitted it
     extensions?: {
       prf?: {
         results?: {

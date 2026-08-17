@@ -2,8 +2,10 @@ import { generateClientDataInfo } from "../helpers/client-data.js";
 import { generateWebauthnClientData } from "../helpers/client-data.js";
 import { PromiseWithResolvers } from "../helpers/index.js";
 import { encodeEC2PublicKeyToSPKI } from "../helpers/public-key.js";
+import { extractRawAuthenticatorData } from "../helpers/attestation.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import { createPRFInput, type PRFInput } from "../helpers/prf.js";
+import { NativeError } from "../helpers/validation.js";
 import {
   removeControllerState,
   setControllerState,
@@ -40,7 +42,7 @@ export interface CreateCredentialResult {
   attestationObject: Buffer;
   authenticatorData: Buffer;
   attachment: AuthenticatorAttachment;
-  transports: string[];
+  transports: AuthenticatorTransport[];
   isResidentKey: boolean;
   publicKeyAlgorithm: number;
   publicKey: Buffer;
@@ -314,17 +316,12 @@ function createCredentialInternal(
   const { clientDataHash, clientDataBuffer } =
     generateClientDataInfo(clientData);
 
-  setControllerState(
-    authController,
-    clientDataHash,
-    supportedAlgorithmIdentifiers,
-    residentKeyRequired,
-    excludeCredentials
-  );
-
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    if (isFinished) {
+      return;
+    }
     isFinished = true;
     removeControllerState(authController);
 
@@ -333,6 +330,25 @@ function createCredentialInternal(
       timeoutHandlerId = null;
     }
   };
+  const failConfiguration = (error: unknown) => {
+    if (isFinished) {
+      return;
+    }
+    reject(error instanceof Error ? error : new Error(String(error)));
+    finished(false);
+    try {
+      authController.cancel();
+    } catch {}
+  };
+
+  setControllerState(
+    authController,
+    clientDataHash,
+    supportedAlgorithmIdentifiers,
+    residentKeyRequired,
+    excludeCredentials,
+    failConfiguration
+  );
 
   // authController.delegate = self
   const delegate = createDelegate("ASAuthorizationControllerDelegate", {
@@ -340,105 +356,119 @@ function createCredentialInternal(
       _,
       authorization
     ) => {
-      const credential = authorization.credential();
-      console.log("Authorization succeeded:", credential);
-
-      const isPlatform =
-        credential instanceof
-        ASAuthorizationPlatformPublicKeyCredentialRegistration;
-      const isSecurityKey =
-        credential instanceof
-        ASAuthorizationSecurityKeyPublicKeyCredentialRegistration;
-      if (!isPlatform && !isSecurityKey) {
-        reject(
-          new Error(
-            "Resulting credential is not a platform or security key credential"
-          )
-        );
-        finished(false);
+      if (isFinished) {
         return;
       }
+      // Without try/catch, a throw here is swallowed by objc-js and the promise hangs.
+      try {
+        const credential = authorization.credential();
 
-      const credentialIdBuffer = bufferFromNSDataDirect(
-        credential.credentialID()
-      );
-
-      const attestationObjectBuffer = bufferFromNSDataDirect(
-        credential.rawAttestationObject()
-      );
-      const attestation = parseAttestationObject(attestationObjectBuffer);
-
-      const publicKey = attestation.authenticatorData.credential.publicKey;
-
-      // Encode the public key to DER-encoded SubjectPublicKeyInfo (SPKI) format
-      const ec2Key = publicKey.ec2();
-      const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
-
-      const authenticatorData = Buffer.from(
-        JSON.stringify(attestation.authenticatorData)
-      );
-
-      let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
-      if (
-        isPlatform &&
-        credential.attachment() ===
-          ASAuthorizationPublicKeyCredentialAttachment.Platform
-      ) {
-        authenticatorAttachment = "platform";
-      }
-
-      let isLargeBlobSupported: boolean | null = null;
-      if (enabledExtensions.includes("largeBlob")) {
-        const largeBlobOutput = credential.largeBlob();
-        if (largeBlobOutput) {
-          isLargeBlobSupported = largeBlobOutput.isSupported();
+        const isPlatform =
+          credential instanceof
+          ASAuthorizationPlatformPublicKeyCredentialRegistration;
+        const isSecurityKey =
+          credential instanceof
+          ASAuthorizationSecurityKeyPublicKeyCredentialRegistration;
+        if (!isPlatform && !isSecurityKey) {
+          failConfiguration(
+            new Error(
+              "Resulting credential is not a platform or security key credential"
+            )
+          );
+          return;
         }
-      }
 
-      let prfFirst: Buffer | null = null;
-      let prfSecond: Buffer | null = null;
-      let isPRFSupported: boolean | null = null;
-      if (enabledExtensions.includes("prf")) {
-        const prfOutput = credential.prf();
-        if (prfOutput) {
-          const prfFirstData = prfOutput.first();
-          const prfSecondData = prfOutput.second();
-          if (prfFirstData) {
-            prfFirst = bufferFromNSDataDirect(prfFirstData);
-          }
-          if (prfSecondData) {
-            prfSecond = bufferFromNSDataDirect(prfSecondData);
-          }
+        const credentialIdBuffer = bufferFromNSDataDirect(
+          credential.credentialID()
+        );
 
-          isPRFSupported = prfOutput.isSupported();
+        const attestationObjectBuffer = bufferFromNSDataDirect(
+          credential.rawAttestationObject()
+        );
+        const attestation = parseAttestationObject(attestationObjectBuffer);
+
+        const publicKey = attestation.authenticatorData.credential.publicKey;
+
+        // Encode the public key to DER-encoded SubjectPublicKeyInfo (SPKI) format
+        const ec2Key = publicKey.ec2();
+        const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
+
+        // Must be the raw authData bytes (not the parsed object) - the relying
+        // party server re-verifies this exact byte sequence against the signature.
+        const authenticatorData = extractRawAuthenticatorData(
+          attestationObjectBuffer
+        );
+
+        let authenticatorAttachment: AuthenticatorAttachment =
+          "cross-platform";
+        if (
+          isPlatform &&
+          credential.attachment() ===
+            ASAuthorizationPublicKeyCredentialAttachment.Platform
+        ) {
+          authenticatorAttachment = "platform";
         }
+
+        let isLargeBlobSupported: boolean | null = null;
+        if (enabledExtensions.includes("largeBlob")) {
+          const largeBlobOutput = credential.largeBlob();
+          if (largeBlobOutput) {
+            isLargeBlobSupported = largeBlobOutput.isSupported();
+          }
+        }
+
+        let prfFirst: Buffer | null = null;
+        let prfSecond: Buffer | null = null;
+        let isPRFSupported: boolean | null = null;
+        if (enabledExtensions.includes("prf")) {
+          const prfOutput = credential.prf();
+          if (prfOutput) {
+            const prfFirstData = prfOutput.first();
+            const prfSecondData = prfOutput.second();
+            if (prfFirstData) {
+              prfFirst = bufferFromNSDataDirect(prfFirstData);
+            }
+            if (prfSecondData) {
+              prfSecond = bufferFromNSDataDirect(prfSecondData);
+            }
+
+            isPRFSupported = prfOutput.isSupported();
+          }
+        }
+
+        // Apple platform authenticators (Touch ID/Face ID) always create discoverable
+        // (resident) passkeys; for security keys we can only report back what we asked for,
+        // since the API doesn't expose whether the authenticator actually honored it.
+        const isResidentKey = isPlatform || residentKeyRequired;
+
+        const data: CreateCredentialResult = {
+          credentialId: credentialIdBuffer,
+          clientDataJSON: clientDataBuffer,
+          attestationObject: attestationObjectBuffer,
+          authenticatorData,
+          attachment: authenticatorAttachment,
+          transports: authenticatorAttachment === "platform" ? ["internal"] : [],
+          isResidentKey,
+          publicKeyAlgorithm: publicKey.algorithm(),
+          publicKey: publicKeySPKI,
+          isLargeBlobSupported,
+          isPRFSupported,
+          prfFirst,
+          prfSecond,
+        };
+        resolve(data);
+
+        finished(true);
+      } catch (error) {
+        failConfiguration(error);
       }
-
-      const data: CreateCredentialResult = {
-        credentialId: credentialIdBuffer,
-        clientDataJSON: clientDataBuffer,
-        attestationObject: attestationObjectBuffer,
-        authenticatorData,
-        attachment: authenticatorAttachment,
-        transports: ["hybrid", "internal"],
-        isResidentKey: true,
-        publicKeyAlgorithm: publicKey.algorithm(),
-        publicKey: publicKeySPKI,
-        isLargeBlobSupported,
-        isPRFSupported,
-        prfFirst,
-        prfSecond,
-      };
-      resolve(data);
-
-      finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      const errorMessage = error.localizedDescription().UTF8String();
-      // console.error("Authorization failed:", errorMessage);
-
-      reject(new Error(errorMessage));
-      finished(false);
+      try {
+        failConfiguration(NativeError.fromNSError(error));
+      } catch (callbackError) {
+        failConfiguration(callbackError);
+      }
     },
   });
   authController.setDelegate$(delegate);
@@ -449,12 +479,17 @@ function createCredentialInternal(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
-  authController.performRequests();
+  try {
+    authController.performRequests();
+  } catch (error) {
+    failConfiguration(error);
+  }
 
-  // Cancelling auth controller on timeout
+  if (isFinished) return promise;
+
+  // After Apple already completed, cancel() is a no-op and will not reject.
   timeoutHandlerId = setTimeout(() => {
-    if (isFinished) return;
-    authController.cancel();
+    failConfiguration(new Error("The operation timed out."));
   }, timeout);
 
   return promise;

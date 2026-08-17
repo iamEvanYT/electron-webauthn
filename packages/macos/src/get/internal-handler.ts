@@ -11,12 +11,14 @@ import {
 } from "../helpers/client-data.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import type { AuthenticatorAttachment } from "../helpers/types.js";
+import { NativeError } from "../helpers/validation.js";
 import { NSStringFromString } from "objcjs-types/helpers";
 import {
   ASAuthorizationPlatformPublicKeyCredentialProvider,
   ASAuthorizationPublicKeyCredentialLargeBlobAssertionInput,
   ASAuthorizationPublicKeyCredentialLargeBlobAssertionOperation,
   ASAuthorizationPlatformPublicKeyCredentialDescriptor,
+  ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor,
   ASAuthorizationSecurityKeyPublicKeyCredentialProvider,
   ASAuthorizationPublicKeyCredentialPRFAssertionInput,
   ASAuthorizationPublicKeyCredentialAttachment,
@@ -59,7 +61,7 @@ export interface GetCredentialResult {
   clientDataJSON: Buffer;
   authenticatorData: Buffer;
   signature: Buffer;
-  userHandle: Buffer;
+  userHandle: Buffer | null;
   prf: [Buffer | null, Buffer | null];
   largeBlob: Buffer | null;
   largeBlobWritten: boolean | null;
@@ -75,6 +77,15 @@ export interface GetCredentialAdditionalOptions {
 
   // iframes handling
   topFrameOrigin?: string;
+}
+
+function bufferFromOptionalNSData(
+  data: _NSData | null | undefined
+): Buffer | null {
+  if (data == null) {
+    return null;
+  }
+  return bufferFromNSDataDirect(data);
 }
 
 function setupPublicKeyCredentialRequest(
@@ -258,11 +269,12 @@ function getCredentialInternal(
   const { clientDataHash, clientDataBuffer } =
     generateClientDataInfo(clientData);
 
-  setClientDataHash(authController, clientDataHash);
-
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    if (isFinished) {
+      return;
+    }
     isFinished = true;
     removeClientDataHash(authController);
 
@@ -271,17 +283,41 @@ function getCredentialInternal(
       timeoutHandlerId = null;
     }
   };
+  const failConfiguration = (error: unknown) => {
+    if (isFinished) {
+      return;
+    }
+    reject(error instanceof Error ? error : new Error(String(error)));
+    finished(false);
+    try {
+      authController.cancel();
+    } catch {}
+  };
 
-  // Set allowed credentials if provided
+  setClientDataHash(authController, clientDataHash, failConfiguration);
+
+  // Set allowed credentials if provided. Must be set on both requests - only setting it
+  // on platformKeyRequest left the security-key request unrestricted, letting any resident
+  // credential on the key be used even when the RP only allow-listed specific credential IDs.
   if (allowedCredentialIds.length > 0) {
-    const allowedCredentials = NSArrayFromObjects(
+    const allowedPlatformCredentials = NSArrayFromObjects(
       allowedCredentialIds.map((id) =>
         ASAuthorizationPlatformPublicKeyCredentialDescriptor.alloc().initWithCredentialID$(
           NSDataFromBuffer(id)
         )
       )
     );
-    platformKeyRequest.setAllowedCredentials$(allowedCredentials);
+    platformKeyRequest.setAllowedCredentials$(allowedPlatformCredentials);
+
+    const allowedSecurityKeyCredentials = NSArrayFromObjects(
+      allowedCredentialIds.map((id) =>
+        ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.alloc().initWithCredentialID$transports$(
+          NSDataFromBuffer(id),
+          NSArrayFromObjects([])
+        )
+      )
+    );
+    securityKeyRequest.setAllowedCredentials$(allowedSecurityKeyCredentials);
   }
 
   // authController.delegate = self
@@ -290,77 +326,100 @@ function getCredentialInternal(
       _,
       authorization
     ) => {
-      const credential = authorization.credential();
-      // console.log("Authorization succeeded:", credential);
-
-      const isPlatform =
-        credential instanceof
-        ASAuthorizationPlatformPublicKeyCredentialAssertion;
-      const isSecurityKey =
-        credential instanceof
-        ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
-      if (!isPlatform && !isSecurityKey) {
-        reject(
-          new Error(
-            "Resulting credential is not a platform or security key credential"
-          )
-        );
-        finished(false);
+      if (isFinished) {
         return;
       }
+      // Without try/catch, a throw here is swallowed by objc-js and the promise hangs.
+      try {
+        const credential = authorization.credential();
 
-      const id_data = credential.credentialID();
-      const id = bufferFromNSDataDirect(id_data);
-
-      let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
-      if (
-        isPlatform &&
-        credential.attachment() ===
-          ASAuthorizationPublicKeyCredentialAttachment.Platform
-      ) {
-        authenticatorAttachment = "platform";
-      }
-
-      const prf = credential.prf();
-      const prfFirst = prf?.first ? prf.first() : null;
-      const prfSecond = prf?.second ? prf.second() : null;
-
-      let largeBlobBuffer: Buffer | null = null;
-      let largeBlobWritten: boolean | null = null;
-      if (credential.largeBlob()) {
-        const largeBlobData = credential.largeBlob().readData();
-        if (largeBlobData) {
-          largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
-        } else {
-          largeBlobWritten = credential.largeBlob().didWrite();
+        const isPlatform =
+          credential instanceof
+          ASAuthorizationPlatformPublicKeyCredentialAssertion;
+        const isSecurityKey =
+          credential instanceof
+          ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
+        if (!isPlatform && !isSecurityKey) {
+          failConfiguration(
+            new Error(
+              "Resulting credential is not a platform or security key credential"
+            )
+          );
+          return;
         }
+
+        const id_data = credential.credentialID();
+        const id = bufferFromNSDataDirect(id_data);
+
+        let authenticatorAttachment: AuthenticatorAttachment =
+          "cross-platform";
+        if (
+          isPlatform &&
+          credential.attachment() ===
+            ASAuthorizationPublicKeyCredentialAttachment.Platform
+        ) {
+          authenticatorAttachment = "platform";
+        }
+
+        // Security-key assertions often throw if prf/largeBlob were never requested.
+        let prfFirst: Buffer | null = null;
+        let prfSecond: Buffer | null = null;
+        if (enabledExtensions.includes("prf")) {
+          const prfOutput = credential.prf();
+          if (prfOutput) {
+            const prfFirstData = prfOutput.first();
+            const prfSecondData = prfOutput.second();
+            if (prfFirstData) {
+              prfFirst = bufferFromNSDataDirect(prfFirstData);
+            }
+            if (prfSecondData) {
+              prfSecond = bufferFromNSDataDirect(prfSecondData);
+            }
+          }
+        }
+
+        let largeBlobBuffer: Buffer | null = null;
+        let largeBlobWritten: boolean | null = null;
+        if (
+          enabledExtensions.includes("largeBlobRead") ||
+          enabledExtensions.includes("largeBlobWrite")
+        ) {
+          const largeBlobOutput = credential.largeBlob();
+          if (largeBlobOutput) {
+            const largeBlobData = largeBlobOutput.readData();
+            if (largeBlobData) {
+              largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
+            } else {
+              largeBlobWritten = largeBlobOutput.didWrite();
+            }
+          }
+        }
+
+        resolve({
+          id,
+          authenticatorAttachment,
+          clientDataJSON: clientDataBuffer, //bufferFromNSDataDirect(credential.rawClientDataJSON()),
+          authenticatorData: bufferFromNSDataDirect(
+            credential.rawAuthenticatorData()
+          ),
+          signature: bufferFromNSDataDirect(credential.signature()),
+          userHandle: bufferFromOptionalNSData(credential.userID()),
+          prf: [prfFirst, prfSecond],
+          largeBlob: largeBlobBuffer,
+          largeBlobWritten,
+        });
+
+        finished(true);
+      } catch (error) {
+        failConfiguration(error);
       }
-
-      resolve({
-        id,
-        authenticatorAttachment,
-        clientDataJSON: clientDataBuffer, //bufferFromNSDataDirect(credential.rawClientDataJSON()),
-        authenticatorData: bufferFromNSDataDirect(
-          credential.rawAuthenticatorData()
-        ),
-        signature: bufferFromNSDataDirect(credential.signature()),
-        userHandle: bufferFromNSDataDirect(credential.userID()),
-        prf: [
-          prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
-          prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
-        ],
-        largeBlob: largeBlobBuffer,
-        largeBlobWritten,
-      });
-
-      finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      const errorMessage = error.localizedDescription().UTF8String();
-      // console.error("Authorization failed:", errorMessage);
-
-      reject(new Error(errorMessage));
-      finished(false);
+      try {
+        failConfiguration(NativeError.fromNSError(error));
+      } catch (callbackError) {
+        failConfiguration(callbackError);
+      }
     },
   });
   authController.setDelegate$(delegate);
@@ -373,12 +432,17 @@ function getCredentialInternal(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
-  authController.performRequests();
+  try {
+    authController.performRequests();
+  } catch (error) {
+    failConfiguration(error);
+  }
 
-  // Cancelling auth controller on timeout
+  if (isFinished) return promise;
+
+  // After Apple already completed, cancel() is a no-op and will not reject.
   timeoutHandlerId = setTimeout(() => {
-    if (isFinished) return;
-    authController.cancel();
+    failConfiguration(new Error("The operation timed out."));
   }, timeout);
 
   return promise;

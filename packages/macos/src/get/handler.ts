@@ -90,7 +90,7 @@ export async function getCredential(
 ): Promise<GetCredentialResult> {
   // Check all the arguments
   if (!publicKeyOptions) {
-    return null;
+    return { success: false, error: "TypeError" };
   }
 
   const rpId = publicKeyOptions.rpId;
@@ -106,7 +106,7 @@ export async function getCredential(
     // 1 hour (max timeout)
     timeout = 60 * 60 * 1000;
   }
-  // TODO: Handle timeout
+  // Timeout is enforced inside getCredentialInternal and surfaces as NotAllowedError.
 
   const challenge = bufferSourceToBuffer(publicKeyOptions.challenge);
   if (!challenge) {
@@ -167,10 +167,8 @@ export async function getCredential(
     }
   ).catch((error: Error) => {
     errorResult = error;
-    // console.error("Error getting credential", error);
-    if (error.message.startsWith("The operation couldn’t be completed.")) {
-      return "NotAllowedError";
-    }
+    // get() has no InvalidStateError. Native failures, including ceremony timeout and
+    // user cancellation, surface as NotAllowedError.
     return "NotAllowedError" as const;
   });
 
@@ -181,26 +179,30 @@ export async function getCredential(
 
   const data: GetCredentialSuccessData = {
     credentialId: bufferToBase64Url(result.id),
+    authenticatorAttachment: result.authenticatorAttachment,
     clientDataJSON: bufferToBase64Url(result.clientDataJSON),
     authenticatorData: bufferToBase64Url(result.authenticatorData),
     signature: bufferToBase64Url(result.signature),
-    userHandle: bufferToBase64Url(result.userHandle),
+    userHandle: result.userHandle
+      ? bufferToBase64Url(result.userHandle)
+      : null,
     extensions: {},
   };
 
   // Add PRF extension results if available
   if (result.prf && (result.prf[0] || result.prf[1])) {
-    data.extensions!.prf = {
+    data.extensions.prf = {
       results: {
-        first: bufferToBase64Url(result.prf[0]!),
+        first: result.prf[0] ? bufferToBase64Url(result.prf[0]) : undefined,
         second: result.prf[1] ? bufferToBase64Url(result.prf[1]) : undefined,
       },
     };
   }
 
   // Add largeBlob extension results if available
-  if (result.largeBlob || result.largeBlobWritten) {
-    data.extensions!.largeBlob = {
+  if (result.largeBlob || result.largeBlobWritten !== null) {
+    // `false` is a meaningful failed-write result, not "extension absent".
+    data.extensions.largeBlob = {
       blob: result.largeBlob ? bufferToBase64Url(result.largeBlob) : undefined,
       written:
         result.largeBlobWritten !== null ? result.largeBlobWritten : undefined,
