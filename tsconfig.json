@@ -1,33 +1,11 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
-    "target": "ESNext",
-    "module": "Node16",
-    "moduleDetection": "force",
-    "types": ["@types/bun"],
     "paths": {
       "@electron-webauthn/types": ["./packages/types/index.d.ts"]
     },
-    "allowJs": true,
     "rootDir": "./src",
-    "outDir": "./dist",
-    "moduleResolution": "node16",
-    "allowImportingTsExtensions": false,
-    "verbatimModuleSyntax": true,
-    "noEmit": false,
-    "declaration": true,
-    "declarationMap": false,
-    "sourceMap": false,
-    "removeComments": true,
-    "strict": true,
-    "strictNullChecks": false,
-    "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "outDir": "./dist"
   },
   "include": ["src/**/*.ts"]
 }
