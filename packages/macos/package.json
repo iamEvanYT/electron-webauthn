@@ -30,14 +30,14 @@
     "test": "bun run src/test/index.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "objcjs-types": "0.8.0",
+    "@types/bun": "^1.4.3",
+    "objcjs-types": "0.9.0",
     "typescript": "~6.0.3"
   },
   "dependencies": {
     "@electron-webauthn/types": "^1.2.0",
     "@oslojs/webauthn": "^1.0.0",
-    "objc-js": "^1.5.0"
+    "objc-js": "^1.6.0"
   },
   "trustedDependencies": [
     "objc-js"

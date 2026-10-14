@@ -8,7 +8,7 @@
         "@electron-webauthn/types": "^1.3.0",
       },
       "devDependencies": {
-        "@types/bun": "latest",
+        "@types/bun": "^1.4.3",
         "typescript": "~6.0.3",
       },
       "optionalDependencies": {
@@ -21,11 +21,11 @@
       "dependencies": {
         "@electron-webauthn/types": "^1.2.0",
         "@oslojs/webauthn": "^1.0.0",
-        "objc-js": "^1.5.0",
+        "objc-js": "^1.6.0",
       },
       "devDependencies": {
-        "@types/bun": "latest",
-        "objcjs-types": "0.8.0",
+        "@types/bun": "^1.4.3",
+        "objcjs-types": "0.9.0",
         "typescript": "~6.0.3",
       },
     },
@@ -54,26 +54,22 @@
 
     "@oslojs/webauthn": ["@oslojs/webauthn@1.0.0", "", { "dependencies": { "@oslojs/asn1": "1.0.0", "@oslojs/binary": "1.0.0", "@oslojs/cbor": "1.0.0", "@oslojs/crypto": "1.0.0", "@oslojs/encoding": "1.0.0" } }, "sha512-2ZRpbt3msNURwvjmavzq9vrNlxUnWFBGMYqbC1kO3fYBLskL7r4DiLJT1wbtLoI+hclFwjhl48YhRFBl6RWg1A=="],
 
-    "@types/bun": ["@types/bun@1.3.11", "", { "dependencies": { "bun-types": "1.3.11" } }, "sha512-5vPne5QvtpjGpsGYXiFyycfpDF2ECyPcTSsFBMa0fraoxiQyMJ3SmuQIGhzPg2WJuWxVBoxWJ2kClYTcw/4fAg=="],
+    "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 
     "@types/node": ["@types/node@25.5.2", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-tO4ZIRKNC+MDWV4qKVZe3Ql/woTnmHDr5JD8UI5hn2pwBrHEwOEMZK7WlNb5RKB6EoJ02gwmQS9OrjuFnZYdpg=="],
 
-    "bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+    "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
-    "node-addon-api": ["node-addon-api@8.7.0", "", {}, "sha512-9MdFxmkKaOYVTV+XVRG8ArDwwQ77XIgIPyKASB1k3JPq3M8fGQQQE3YpMOrKm6g//Ktx8ivZr8xo1Qmtqub+GA=="],
+    "node-addon-api": ["node-addon-api@8.9.2", "", {}, "sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg=="],
 
     "node-gyp-build": ["node-gyp-build@4.8.4", "", { "bin": { "node-gyp-build": "bin.js", "node-gyp-build-optional": "optional.js", "node-gyp-build-test": "build-test.js" } }, "sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ=="],
 
-    "objc-js": ["objc-js@1.5.0", "", { "dependencies": { "node-addon-api": "^8.5.0", "node-gyp-build": "^4.8.4" }, "os": "darwin" }, "sha512-IHmouX5xYrE2UyGRRlpwY7u2HJVjF6P/P+jy6Vqga+Ya7RAf/hFeNkt4KgTkGUMM3VmnBVUEMJ0tKWY2RlYgKg=="],
+    "objc-js": ["objc-js@1.6.0", "", { "dependencies": { "node-addon-api": "^8.9.2", "node-gyp-build": "^4.8.4" }, "os": "darwin" }, "sha512-f5vQ79KRVe04QlXPUGKGBUDqnPz8wm9obmDj3wW73dXluFSX47Ttev0AKd3tTPANNJElotXzq+cs9RY/M62u0g=="],
 
-    "objcjs-types": ["objcjs-types@0.8.0", "", { "peerDependencies": { "objc-js": "^1.5.0", "typescript": "^5.9.3" }, "bin": { "objcjs-types": "bin/objcjs-types.ts" } }, "sha512-ngwGMICAeyF8d0zRz9+IRnAbf6B7zeDaiHEROWbE0GSCaFXYo0zJxA0wit/TjFhc4Lfvs5fDq1mmpgtbLZ6+SA=="],
+    "objcjs-types": ["objcjs-types@0.9.0", "", { "peerDependencies": { "objc-js": "^1.6.0", "typescript": "^5.9.3" }, "bin": { "objcjs-types": "bin/objcjs-types.ts" } }, "sha512-Smx5VfgvLhXxLsT2dkInrLES/pZeakvso/aoMuD2F2m6SGMr6pWT9YCxU5alVpZQM3AGwycJkhbyA2k8Tzc1gw=="],
 
     "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
-
-    "@electron-webauthn/macos/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
-
-    "@electron-webauthn/macos/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
   }
 }
