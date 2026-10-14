@@ -321,7 +321,8 @@ function createCredentialInternal(
     clientDataHash,
     supportedAlgorithmIdentifiers,
     residentKeyRequired,
-    excludeCredentials
+    excludeCredentials,
+    (error) => fail(error)
   );
 
   let isFinished = false;
@@ -472,7 +473,13 @@ function createCredentialInternal(
   authController.setPresentationContextProvider$(presentationContextProvider);
 
   // authController.performRequests()
-  authController.performRequests();
+  try {
+    authController.performRequests();
+  } catch (error) {
+    fail(error);
+  }
+
+  if (isFinished) return promise;
 
   // Cancelling auth controller on timeout
   timeoutHandlerId = setTimeout(() => {

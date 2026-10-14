@@ -8,12 +8,17 @@ import { ASCPublicKeyCredentialDescriptor } from "../additional-objc/ASCPublicKe
 
 const createControllerState = new Map<string, CreateControllerState>();
 
-type CreateControllerState = [
+type CreateControllerOptions = [
   Buffer,
   PublicKeyCredentialParams[],
   boolean,
   ExcludeCredential[],
 ];
+
+interface CreateControllerState {
+  options: CreateControllerOptions;
+  onConfigurationError: (error: unknown) => void;
+}
 
 function applyCreateOptions(
   registrationOptions: any,
@@ -23,7 +28,7 @@ function applyCreateOptions(
     pubKeyCredParams,
     residentKeyRequired,
     excludeCredentials,
-  ]: CreateControllerState
+  ]: CreateControllerOptions
 ) {
   registrationOptions.setClientDataHash$(NSDataFromBuffer(clientDataHash));
   registrationOptions.setChallenge$(null);
@@ -90,15 +95,19 @@ export function setControllerState(
   clientDataHash: Buffer,
   pubKeyCredParams: PublicKeyCredentialParams[],
   residentKeyRequired: boolean,
-  excludeCredentialIds: ExcludeCredential[]
+  excludeCredentialIds: ExcludeCredential[],
+  onConfigurationError: (error: unknown) => void
 ) {
   const selfPointer = getObjectPointerString(self);
-  createControllerState.set(selfPointer, [
-    clientDataHash,
-    pubKeyCredParams,
-    residentKeyRequired,
-    excludeCredentialIds,
-  ]);
+  createControllerState.set(selfPointer, {
+    options: [
+      clientDataHash,
+      pubKeyCredParams,
+      residentKeyRequired,
+      excludeCredentialIds,
+    ],
+    onConfigurationError,
+  });
 }
 
 export function removeControllerState(self: NobjcObject) {
@@ -124,18 +133,24 @@ export const WebauthnCreateController = NobjcClass.define({
         // Grab the registration options for every request type that is present and apply our configuration to each.
         // Both must be patched: the user can pick either authenticator when both are requested.
         const selfPointer = getObjectPointerString(self);
-        if (context && createControllerState.has(selfPointer)) {
-          const state = createControllerState.get(selfPointer)!;
+        const state = createControllerState.get(selfPointer);
+        if (context && state) {
+          // The security key setters are private and may be missing on some macOS versions.
+          // Fail the ceremony instead of leaving a partially configured request active.
+          try {
+            const platformOptions =
+              context.platformKeyCredentialCreationOptions();
+            if (platformOptions) {
+              applyCreateOptions(platformOptions, false, state.options);
+            }
 
-          const platformOptions = context.platformKeyCredentialCreationOptions();
-          if (platformOptions) {
-            applyCreateOptions(platformOptions, false, state);
-          }
-
-          const securityKeyOptions =
-            context.securityKeyCredentialCreationOptions();
-          if (securityKeyOptions) {
-            applyCreateOptions(securityKeyOptions, true, state);
+            const securityKeyOptions =
+              context.securityKeyCredentialCreationOptions();
+            if (securityKeyOptions) {
+              applyCreateOptions(securityKeyOptions, true, state.options);
+            }
+          } catch (error) {
+            state.onConfigurationError(error);
           }
         }
 

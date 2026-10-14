@@ -2,15 +2,24 @@ import { NobjcClass, NobjcObject, getPointer } from "objc-js";
 import type { ASAuthorizationController } from "objcjs-types/AuthenticationServices";
 import { NSDataFromBuffer } from "objcjs-types/nsdata";
 
-const getControllerState = new Map<string, Buffer>();
+interface GetControllerState {
+  clientDataHash: Buffer;
+  onConfigurationError: (error: unknown) => void;
+}
+
+const getControllerState = new Map<string, GetControllerState>();
 
 function getObjectPointerString(self: NobjcObject) {
   return getPointer(self).toString("base64");
 }
 
-export function setClientDataHash(self: NobjcObject, clientDataHash: Buffer) {
+export function setClientDataHash(
+  self: NobjcObject,
+  clientDataHash: Buffer,
+  onConfigurationError: (error: unknown) => void
+) {
   const selfPointer = getObjectPointerString(self);
-  getControllerState.set(selfPointer, clientDataHash);
+  getControllerState.set(selfPointer, { clientDataHash, onConfigurationError });
 }
 
 export function removeClientDataHash(self: NobjcObject) {
@@ -36,23 +45,29 @@ export const WebauthnGetController = NobjcClass.define({
         // Grab the assertion options for every request type that is present and set the client data hash on each.
         // Both must be patched: the user can pick either authenticator when both are requested.
         const selfPointer = getObjectPointerString(self);
-        if (context && getControllerState.has(selfPointer)) {
-          const clientDataHash = NSDataFromBuffer(
-            getControllerState.get(selfPointer)
-          );
+        const state = getControllerState.get(selfPointer);
+        if (context && state) {
+          // The security key setters are private and may be missing on some macOS versions.
+          // Fail the ceremony instead of leaving a partially configured request active.
+          try {
+            const clientDataHash = NSDataFromBuffer(state.clientDataHash);
 
-          const platformOptions = context.platformKeyCredentialAssertionOptions();
-          if (platformOptions) {
-            platformOptions.setClientDataHash$(clientDataHash);
-            context.setPlatformKeyCredentialAssertionOptions$(
-              platformOptions.copyWithZone$(null)
-            );
-          }
+            const platformOptions =
+              context.platformKeyCredentialAssertionOptions();
+            if (platformOptions) {
+              platformOptions.setClientDataHash$(clientDataHash);
+              context.setPlatformKeyCredentialAssertionOptions$(
+                platformOptions.copyWithZone$(null)
+              );
+            }
 
-          const securityKeyOptions =
-            context.securityKeyCredentialAssertionOptions();
-          if (securityKeyOptions) {
-            securityKeyOptions.setClientDataHash$(clientDataHash);
+            const securityKeyOptions =
+              context.securityKeyCredentialAssertionOptions();
+            if (securityKeyOptions) {
+              securityKeyOptions.setClientDataHash$(clientDataHash);
+            }
+          } catch (error) {
+            state.onConfigurationError(error);
           }
         }
 
