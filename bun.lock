@@ -9,17 +9,15 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "typescript": "~6.0.3",
       },
       "optionalDependencies": {
         "@electron-webauthn/macos": "^1.3.0",
       },
-      "peerDependencies": {
-        "typescript": "^6.0.2",
-      },
     },
     "packages/macos": {
       "name": "@electron-webauthn/macos",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "dependencies": {
         "@electron-webauthn/types": "^1.2.0",
         "@oslojs/webauthn": "^1.0.0",
@@ -28,14 +26,12 @@
       "devDependencies": {
         "@types/bun": "latest",
         "objcjs-types": "0.8.0",
-      },
-      "peerDependencies": {
-        "typescript": "^6.0.2",
+        "typescript": "~6.0.3",
       },
     },
     "packages/types": {
       "name": "@electron-webauthn/types",
-      "version": "1.3.0",
+      "version": "1.3.1",
     },
   },
   "trustedDependencies": [
@@ -72,8 +68,12 @@
 
     "objcjs-types": ["objcjs-types@0.8.0", "", { "peerDependencies": { "objc-js": "^1.5.0", "typescript": "^5.9.3" }, "bin": { "objcjs-types": "bin/objcjs-types.ts" } }, "sha512-ngwGMICAeyF8d0zRz9+IRnAbf6B7zeDaiHEROWbE0GSCaFXYo0zJxA0wit/TjFhc4Lfvs5fDq1mmpgtbLZ6+SA=="],
 
-    "typescript": ["typescript@6.0.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ=="],
+    "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
+
+    "@electron-webauthn/macos/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "@electron-webauthn/macos/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
   }
 }
