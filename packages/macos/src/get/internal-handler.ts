@@ -60,7 +60,7 @@ export interface GetCredentialResult {
   clientDataJSON: Buffer;
   authenticatorData: Buffer;
   signature: Buffer;
-  userHandle: Buffer;
+  userHandle: Buffer | null;
   prf: [Buffer | null, Buffer | null];
   largeBlob: Buffer | null;
   largeBlobWritten: boolean | null;
@@ -338,18 +338,33 @@ function getCredentialInternal(
           authenticatorAttachment = "platform";
         }
 
-        const prf = credential.prf();
-        const prfFirst = prf?.first ? prf.first() : null;
-        const prfSecond = prf?.second ? prf.second() : null;
+        // Security-key assertions can throw if prf/largeBlob were never requested, so only read them when enabled.
+        let prfFirst: Buffer | null = null;
+        let prfSecond: Buffer | null = null;
+        if (enabledExtensions.includes("prf")) {
+          const prf = credential.prf();
+          const prfFirstData = prf?.first ? prf.first() : null;
+          const prfSecondData = prf?.second ? prf.second() : null;
+          prfFirst = prfFirstData ? bufferFromNSDataDirect(prfFirstData) : null;
+          prfSecond = prfSecondData
+            ? bufferFromNSDataDirect(prfSecondData)
+            : null;
+        }
 
         let largeBlobBuffer: Buffer | null = null;
         let largeBlobWritten: boolean | null = null;
-        if (credential.largeBlob()) {
-          const largeBlobData = credential.largeBlob().readData();
-          if (largeBlobData) {
-            largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
-          } else {
-            largeBlobWritten = credential.largeBlob().didWrite();
+        if (
+          enabledExtensions.includes("largeBlobRead") ||
+          enabledExtensions.includes("largeBlobWrite")
+        ) {
+          const largeBlobOutput = credential.largeBlob();
+          if (largeBlobOutput) {
+            const largeBlobData = largeBlobOutput.readData();
+            if (largeBlobData) {
+              largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
+            } else {
+              largeBlobWritten = largeBlobOutput.didWrite();
+            }
           }
         }
 
@@ -361,11 +376,10 @@ function getCredentialInternal(
             credential.rawAuthenticatorData()
           ),
           signature: bufferFromNSDataDirect(credential.signature()),
-          userHandle: bufferFromNSDataDirect(credential.userID()),
-          prf: [
-            prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
-            prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
-          ],
+          userHandle: credential.userID()
+            ? bufferFromNSDataDirect(credential.userID())
+            : null,
+          prf: [prfFirst, prfSecond],
           largeBlob: largeBlobBuffer,
           largeBlobWritten,
         });

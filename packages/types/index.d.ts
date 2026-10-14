@@ -9,7 +9,7 @@ export interface GetCredentialSuccessData {
   clientDataJSON: string;
   authenticatorData: string;
   signature: string;
-  userHandle: string;
+  userHandle: string | null;
   authenticatorAttachment: "platform" | "cross-platform";
   extensions?: {
     prf?: {

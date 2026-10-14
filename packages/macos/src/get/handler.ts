@@ -181,7 +181,9 @@ export async function getCredential(
     clientDataJSON: bufferToBase64Url(result.clientDataJSON),
     authenticatorData: bufferToBase64Url(result.authenticatorData),
     signature: bufferToBase64Url(result.signature),
-    userHandle: bufferToBase64Url(result.userHandle),
+    userHandle: result.userHandle
+      ? bufferToBase64Url(result.userHandle)
+      : null,
     authenticatorAttachment: result.authenticatorAttachment,
     extensions: {},
   };
@@ -197,7 +199,7 @@ export async function getCredential(
   }
 
   // Add largeBlob extension results if available
-  if (result.largeBlob || result.largeBlobWritten) {
+  if (result.largeBlob || result.largeBlobWritten !== null) {
     data.extensions!.largeBlob = {
       blob: result.largeBlob ? bufferToBase64Url(result.largeBlob) : undefined,
       written:
