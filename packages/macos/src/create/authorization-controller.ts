@@ -6,10 +6,75 @@ import { NSArrayFromObjects, NSStringFromString } from "objcjs-types/helpers";
 import { NSNumber } from "objcjs-types/Foundation";
 import { ASCPublicKeyCredentialDescriptor } from "../additional-objc/ASCPublicKeyCredentialDescriptor.js";
 
-const createControllerState = new Map<
-  string,
-  [Buffer, PublicKeyCredentialParams[], boolean, ExcludeCredential[]]
->();
+const createControllerState = new Map<string, CreateControllerState>();
+
+type CreateControllerState = [
+  Buffer,
+  PublicKeyCredentialParams[],
+  boolean,
+  ExcludeCredential[],
+];
+
+function applyCreateOptions(
+  registrationOptions: any,
+  isSecurityKey: boolean,
+  [
+    clientDataHash,
+    pubKeyCredParams,
+    residentKeyRequired,
+    excludeCredentials,
+  ]: CreateControllerState
+) {
+  registrationOptions.setClientDataHash$(NSDataFromBuffer(clientDataHash));
+  registrationOptions.setChallenge$(null);
+
+  // Set supported algorithm identifiers
+  const supportedAlgos: NobjcObject[] = [];
+  for (const param of pubKeyCredParams) {
+    if (param.type === "public-key") {
+      const nsNum = NSNumber.numberWithInteger$(param.algorithm);
+      supportedAlgos.push(nsNum);
+    }
+  }
+  if (supportedAlgos.length > 0) {
+    registrationOptions.setSupportedAlgorithmIdentifiers$(
+      NSArrayFromObjects(supportedAlgos as unknown as NobjcObject[])
+    );
+  }
+
+  // Set resident key requirement
+  // If this is enabled for security keys, users will not be able to scan QR code to register a new credential.
+  if (!isSecurityKey) {
+    registrationOptions.setShouldRequireResidentKey$(residentKeyRequired);
+  }
+
+  // Set excluded credentials
+  const excludeList: NobjcObject[] = [];
+  for (const cred of excludeCredentials) {
+    // Convert transports to NSArray of NSString
+    const transports: NobjcObject[] = [];
+    if (cred.transports) {
+      for (const transport of cred.transports) {
+        transports.push(NSStringFromString(transport));
+      }
+    }
+
+    // Create descriptor
+    const credentialID = NSDataFromBuffer(cred.id);
+    const transportsArray = NSArrayFromObjects(transports);
+
+    // ASCPublicKeyCredentialDescriptor is a private class!
+    const initializedDescriptor =
+      ASCPublicKeyCredentialDescriptor.alloc().initWithCredentialID$transports$(
+        credentialID,
+        transportsArray
+      );
+    excludeList.push(initializedDescriptor);
+  }
+  if (excludeList.length > 0) {
+    registrationOptions.setExcludedCredentials$(NSArrayFromObjects(excludeList));
+  }
+}
 
 function getObjectPointerString(self: NobjcObject) {
   return getPointer(self).toString("base64");
@@ -56,80 +121,21 @@ export const WebauthnCreateController = NobjcClass.define({
           outError
         );
 
-        // Grab the registration options, set the client data hash, and set a copy of the registration options back on the context
+        // Grab the registration options for every request type that is present and apply our configuration to each.
+        // Both must be patched: the user can pick either authenticator when both are requested.
         const selfPointer = getObjectPointerString(self);
         if (context && createControllerState.has(selfPointer)) {
-          let isSecurityKey = false;
+          const state = createControllerState.get(selfPointer)!;
 
-          let registrationOptions =
-            context.platformKeyCredentialCreationOptions();
-          if (!registrationOptions) {
-            registrationOptions =
-              context.securityKeyCredentialCreationOptions();
-            isSecurityKey = true;
+          const platformOptions = context.platformKeyCredentialCreationOptions();
+          if (platformOptions) {
+            applyCreateOptions(platformOptions, false, state);
           }
 
-          const [
-            clientDataHash,
-            pubKeyCredParams,
-            residentKeyRequired,
-            excludeCredentials,
-          ] = createControllerState.get(selfPointer);
-
-          registrationOptions.setClientDataHash$(
-            NSDataFromBuffer(clientDataHash)
-          );
-          registrationOptions.setChallenge$(null);
-
-          // Set supported algorithm identifiers
-          const supportedAlgos: NobjcObject[] = [];
-          for (const param of pubKeyCredParams) {
-            if (param.type === "public-key") {
-              const nsNum = NSNumber.numberWithInteger$(param.algorithm);
-              supportedAlgos.push(nsNum);
-            }
-          }
-          if (supportedAlgos.length > 0) {
-            registrationOptions.setSupportedAlgorithmIdentifiers$(
-              NSArrayFromObjects(supportedAlgos as unknown as NobjcObject[])
-            );
-          }
-
-          // Set resident key requirement
-          // If this is enabled for security keys, users will not be able to scan QR code to register a new credential.
-          if (!isSecurityKey) {
-            registrationOptions.setShouldRequireResidentKey$(
-              residentKeyRequired
-            );
-          }
-
-          // Set excluded credentials
-          const excludeList: NobjcObject[] = [];
-          for (const cred of excludeCredentials) {
-            // Convert transports to NSArray of NSString
-            const transports: NobjcObject[] = [];
-            if (cred.transports) {
-              for (const transport of cred.transports) {
-                transports.push(NSStringFromString(transport));
-              }
-            }
-
-            // Create descriptor
-            const credentialID = NSDataFromBuffer(cred.id);
-            const transportsArray = NSArrayFromObjects(transports);
-
-            // ASCPublicKeyCredentialDescriptor is a private class!
-            const initializedDescriptor =
-              ASCPublicKeyCredentialDescriptor.alloc().initWithCredentialID$transports$(
-                credentialID,
-                transportsArray
-              );
-            excludeList.push(initializedDescriptor);
-          }
-          if (excludeList.length > 0) {
-            registrationOptions.setExcludedCredentials$(
-              NSArrayFromObjects(excludeList)
-            );
+          const securityKeyOptions =
+            context.securityKeyCredentialCreationOptions();
+          if (securityKeyOptions) {
+            applyCreateOptions(securityKeyOptions, true, state);
           }
         }
 

@@ -33,21 +33,27 @@ export const WebauthnGetController = NobjcClass.define({
           outError
         );
 
-        // Grab the assertion options, set the client data hash, and set a copy of the assertion options back on the context
+        // Grab the assertion options for every request type that is present and set the client data hash on each.
+        // Both must be patched: the user can pick either authenticator when both are requested.
         const selfPointer = getObjectPointerString(self);
-        if (getControllerState.has(selfPointer)) {
-          let assertionOptions =
-            context.platformKeyCredentialAssertionOptions();
-          if (!assertionOptions) {
-            assertionOptions = context.securityKeyCredentialAssertionOptions();
+        if (context && getControllerState.has(selfPointer)) {
+          const clientDataHash = NSDataFromBuffer(
+            getControllerState.get(selfPointer)
+          );
+
+          const platformOptions = context.platformKeyCredentialAssertionOptions();
+          if (platformOptions) {
+            platformOptions.setClientDataHash$(clientDataHash);
+            context.setPlatformKeyCredentialAssertionOptions$(
+              platformOptions.copyWithZone$(null)
+            );
           }
 
-          const clientDataHash = getControllerState.get(selfPointer);
-          assertionOptions.setClientDataHash$(NSDataFromBuffer(clientDataHash));
-
-          context.setPlatformKeyCredentialAssertionOptions$(
-            assertionOptions.copyWithZone$(null)
-          );
+          const securityKeyOptions =
+            context.securityKeyCredentialAssertionOptions();
+          if (securityKeyOptions) {
+            securityKeyOptions.setClientDataHash$(clientDataHash);
+          }
         }
 
         return context;
