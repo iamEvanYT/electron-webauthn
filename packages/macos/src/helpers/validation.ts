@@ -1,9 +1,9 @@
 export function isString(value: unknown): value is string {
-  return value && typeof value === "string";
+  return typeof value === "string";
 }
 
 export function isNumber(value: unknown): value is number {
-  return value && typeof value === "number";
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 export function isObject(value: unknown) {
