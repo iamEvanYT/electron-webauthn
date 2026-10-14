@@ -59,7 +59,7 @@ yarn add electron-webauthn
 
 - Electron 28+
 - macOS 12.0+
-- TypeScript 5+ (peer dependency)
+- TypeScript is optional; type definitions are bundled (TypeScript 5+ if you use them)
 
 ## Quick Start
 
@@ -83,9 +83,11 @@ This library implements the W3C WebAuthn standard using Apple's native Authentic
 
 - Validates origins and Relying Party IDs according to the WebAuthn specification
 - Generates proper client data with `crossOrigin` field support (fixing Apple's default behavior)
-- Handles both platform (Touch ID/Face ID) and cross-platform (security keys) authenticators simultaneously
+- Handles both platform (Touch ID/Face ID) and cross-platform (security keys) authenticators simultaneously, applying the same `clientDataHash` to both so results verify
+- Fails closed: if request configuration fails, the ceremony is cancelled and rejected instead of continuing with a partially configured request
+- Maps native errors by `NSError` code and domain, so error results don't depend on the system language
 - Properly manages WebAuthn extensions (PRF, Large Blob)
-- Returns base64url-encoded values ready to send to your server for verification
+- Returns base64url-encoded values ready to send to your server for verification, including the raw authenticator data bytes as `authData` on create
 
 ## Error Handling
 
@@ -149,9 +151,9 @@ console.log(`Found ${result.credentials.length} passkeys`);
 #### For Both Registration and Authentication
 
 - **TypeError**: Invalid parameter types (missing required fields, wrong data types)
-- **NotAllowedError**: User cancelled the prompt or the authenticator failed
+- **NotAllowedError**: User cancelled the prompt, the ceremony timed out, or the authenticator failed
 - **SecurityError**: Origin doesn't match rpId, invalid origin format, or rpId is a public suffix
-- **AbortError**: Operation timeout or explicitly aborted
+- **AbortError**: Operation explicitly aborted
 
 #### Registration-Specific (`createCredential`)
 
@@ -204,7 +206,8 @@ console.log(`Found ${result.credentials.length} passkeys`);
 
 ## Known Limitations
 
-- **PRF and Large Blob extensions**: Only supported on platform authenticators (Touch ID/Face ID), not security keys on macOS
+- **PRF and Large Blob extensions**: This library only sends these extensions with the platform authenticator request (Touch ID/Face ID). Security keys such as YubiKeys work for registration and authentication, including with `authenticatorAttachment: "all"`, but requests to them are made without PRF or Large Blob, so no `prf` or `largeBlob` results come back from a security key.
+- **Security key transports**: `transports` is `["hybrid", "internal"]` for platform credentials and `[]` for security keys, because macOS doesn't expose the security key transport. Use `authenticatorAttachment` on the result to tell them apart.
 - **Attestation formats**: macOS typically returns "none" attestation even when "direct" or "indirect" is requested, unless the authenticator specifically supports it
 
 ## License
