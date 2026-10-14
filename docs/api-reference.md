@@ -38,10 +38,11 @@ interface CreateCredentialSuccessResult {
     credentialId: string; // Base64url-encoded credential ID
     clientDataJSON: string; // Base64url-encoded client data
     attestationObject: string; // Base64url-encoded attestation object
-    authData: string; // Base64url-encoded authenticator data
+    authData: string; // Base64url-encoded raw authenticator data
     publicKey: string; // Base64url-encoded public key (COSE format)
     publicKeyAlgorithm: number; // COSE algorithm identifier (e.g., -7 for ES256)
-    transports: string[]; // Available transports (e.g., ["internal", "usb"])
+    transports: AuthenticatorTransport[]; // ["internal"] for platform authenticators, [] for security keys
+    authenticatorAttachment: "platform" | "cross-platform";
     extensions: {
       credProps?: {
         rk: boolean; // True if credential is a resident key
@@ -197,10 +198,11 @@ interface GetCredentialSuccessResult {
     authenticatorData: string; // Base64url-encoded authenticator data
     signature: string; // Base64url-encoded signature
     userHandle: string; // Base64url-encoded user handle
+    authenticatorAttachment: "platform" | "cross-platform";
     extensions?: {
       prf?: {
         results?: {
-          first: string; // Base64url-encoded PRF output
+          first?: string; // Base64url-encoded PRF output
           second?: string; // Base64url-encoded PRF output (if provided)
         };
       };

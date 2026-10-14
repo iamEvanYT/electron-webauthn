@@ -182,6 +182,7 @@ export async function getCredential(
     authenticatorData: bufferToBase64Url(result.authenticatorData),
     signature: bufferToBase64Url(result.signature),
     userHandle: bufferToBase64Url(result.userHandle),
+    authenticatorAttachment: result.authenticatorAttachment,
     extensions: {},
   };
 

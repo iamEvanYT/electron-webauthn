@@ -10,6 +10,7 @@ export interface GetCredentialSuccessData {
   authenticatorData: string;
   signature: string;
   userHandle: string;
+  authenticatorAttachment: "platform" | "cross-platform";
   extensions?: {
     prf?: {
       results?: {
@@ -53,7 +54,8 @@ export interface CreateCredentialSuccessData {
   authData: string;
   publicKey: string;
   publicKeyAlgorithm: number;
-  transports: string[];
+  transports: ("ble" | "hybrid" | "internal" | "nfc" | "usb")[];
+  authenticatorAttachment: "platform" | "cross-platform";
   extensions: {
     credProps?: {
       rk: boolean;

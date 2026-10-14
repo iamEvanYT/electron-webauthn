@@ -42,7 +42,7 @@ export interface CreateCredentialResult {
   attestationObject: Buffer;
   authenticatorData: Buffer;
   attachment: AuthenticatorAttachment;
-  transports: string[];
+  transports: AuthenticatorTransport[];
   isResidentKey: boolean;
   publicKeyAlgorithm: number;
   publicKey: Buffer;
@@ -422,7 +422,8 @@ function createCredentialInternal(
         attestationObject: attestationObjectBuffer,
         authenticatorData,
         attachment: authenticatorAttachment,
-        transports: ["hybrid", "internal"],
+        // Touch ID is internal only. macOS does not expose the transport used by security keys.
+        transports: isPlatform ? ["internal"] : [],
         isResidentKey: true,
         publicKeyAlgorithm: publicKey.algorithm(),
         publicKey: publicKeySPKI,

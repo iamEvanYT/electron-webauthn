@@ -264,6 +264,7 @@ export async function createCredential(
     publicKey: bufferToBase64Url(result.publicKey),
     publicKeyAlgorithm: result.publicKeyAlgorithm,
     transports: result.transports,
+    authenticatorAttachment: result.attachment,
     extensions: {},
   };
 
