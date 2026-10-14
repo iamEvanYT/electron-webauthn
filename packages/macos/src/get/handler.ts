@@ -192,7 +192,7 @@ export async function getCredential(
   if (result.prf && (result.prf[0] || result.prf[1])) {
     data.extensions!.prf = {
       results: {
-        first: bufferToBase64Url(result.prf[0]!),
+        first: result.prf[0] ? bufferToBase64Url(result.prf[0]) : undefined,
         second: result.prf[1] ? bufferToBase64Url(result.prf[1]) : undefined,
       },
     };

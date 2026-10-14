@@ -13,7 +13,7 @@ export interface GetCredentialSuccessData {
   extensions?: {
     prf?: {
       results?: {
-        first: string;
+        first?: string;
         second?: string;
       };
     };
