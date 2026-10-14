@@ -197,7 +197,7 @@ console.log(`Found ${result.credentials.length} passkeys`);
 
 **Not Yet Supported:**
 
-- ❌ Conditional UI (autofill/conditional mediation)
+- ❌ Built-in Conditional UI (autofill/conditional mediation). Chromium renders the page's inputs, so the native AutoFill UI can't attach to them. Apps can implement it themselves by keeping the `mediation: "conditional"` request pending, showing their own picker populated from `listPasskeys`, then running a normal assertion with `allowCredentials` set to the chosen passkey (see [Flow Browser](https://github.com/MultiboxLabs/flow-browser) for an example)
 - ❌ Other WebAuthn extensions (credProtect, minPinLength, hmac-secret, etc.)
 
 ### Security Recommendations
