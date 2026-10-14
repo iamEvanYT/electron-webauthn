@@ -264,12 +264,25 @@ function getCredentialInternal(
   let isFinished = false;
   let timeoutHandlerId: NodeJS.Timeout | null = null;
   const finished = (_success: boolean) => {
+    if (isFinished) return;
     isFinished = true;
     removeClientDataHash(authController);
 
     if (timeoutHandlerId) {
       clearTimeout(timeoutHandlerId);
       timeoutHandlerId = null;
+    }
+  };
+
+  // Rejects, cleans up and cancels the controller. Safe to call more than once.
+  const fail = (error: unknown) => {
+    if (isFinished) return;
+    reject(error instanceof Error ? error : new Error(String(error)));
+    finished(false);
+    try {
+      authController.cancel();
+    } catch {
+      // The controller may already be done
     }
   };
 
@@ -291,74 +304,83 @@ function getCredentialInternal(
       _,
       authorization
     ) => {
-      const credential = authorization.credential();
-      // console.log("Authorization succeeded:", credential);
+      if (isFinished) return;
+      // A throw inside a native callback is swallowed by objc-js and would leave the promise pending forever.
+      try {
+        const credential = authorization.credential();
+        // console.log("Authorization succeeded:", credential);
 
-      const isPlatform =
-        credential instanceof
-        ASAuthorizationPlatformPublicKeyCredentialAssertion;
-      const isSecurityKey =
-        credential instanceof
-        ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
-      if (!isPlatform && !isSecurityKey) {
-        reject(
-          new Error(
-            "Resulting credential is not a platform or security key credential"
-          )
-        );
-        finished(false);
-        return;
-      }
-
-      const id_data = credential.credentialID();
-      const id = bufferFromNSDataDirect(id_data);
-
-      let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
-      if (
-        isPlatform &&
-        credential.attachment() ===
-          ASAuthorizationPublicKeyCredentialAttachment.Platform
-      ) {
-        authenticatorAttachment = "platform";
-      }
-
-      const prf = credential.prf();
-      const prfFirst = prf?.first ? prf.first() : null;
-      const prfSecond = prf?.second ? prf.second() : null;
-
-      let largeBlobBuffer: Buffer | null = null;
-      let largeBlobWritten: boolean | null = null;
-      if (credential.largeBlob()) {
-        const largeBlobData = credential.largeBlob().readData();
-        if (largeBlobData) {
-          largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
-        } else {
-          largeBlobWritten = credential.largeBlob().didWrite();
+        const isPlatform =
+          credential instanceof
+          ASAuthorizationPlatformPublicKeyCredentialAssertion;
+        const isSecurityKey =
+          credential instanceof
+          ASAuthorizationSecurityKeyPublicKeyCredentialAssertion;
+        if (!isPlatform && !isSecurityKey) {
+          reject(
+            new Error(
+              "Resulting credential is not a platform or security key credential"
+            )
+          );
+          finished(false);
+          return;
         }
+
+        const id_data = credential.credentialID();
+        const id = bufferFromNSDataDirect(id_data);
+
+        let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
+        if (
+          isPlatform &&
+          credential.attachment() ===
+            ASAuthorizationPublicKeyCredentialAttachment.Platform
+        ) {
+          authenticatorAttachment = "platform";
+        }
+
+        const prf = credential.prf();
+        const prfFirst = prf?.first ? prf.first() : null;
+        const prfSecond = prf?.second ? prf.second() : null;
+
+        let largeBlobBuffer: Buffer | null = null;
+        let largeBlobWritten: boolean | null = null;
+        if (credential.largeBlob()) {
+          const largeBlobData = credential.largeBlob().readData();
+          if (largeBlobData) {
+            largeBlobBuffer = bufferFromNSDataDirect(largeBlobData);
+          } else {
+            largeBlobWritten = credential.largeBlob().didWrite();
+          }
+        }
+
+        resolve({
+          id,
+          authenticatorAttachment,
+          clientDataJSON: clientDataBuffer, //bufferFromNSDataDirect(credential.rawClientDataJSON()),
+          authenticatorData: bufferFromNSDataDirect(
+            credential.rawAuthenticatorData()
+          ),
+          signature: bufferFromNSDataDirect(credential.signature()),
+          userHandle: bufferFromNSDataDirect(credential.userID()),
+          prf: [
+            prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
+            prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
+          ],
+          largeBlob: largeBlobBuffer,
+          largeBlobWritten,
+        });
+
+        finished(true);
+      } catch (error) {
+        fail(error);
       }
-
-      resolve({
-        id,
-        authenticatorAttachment,
-        clientDataJSON: clientDataBuffer, //bufferFromNSDataDirect(credential.rawClientDataJSON()),
-        authenticatorData: bufferFromNSDataDirect(
-          credential.rawAuthenticatorData()
-        ),
-        signature: bufferFromNSDataDirect(credential.signature()),
-        userHandle: bufferFromNSDataDirect(credential.userID()),
-        prf: [
-          prfFirst ? bufferFromNSDataDirect(prfFirst) : null,
-          prfSecond ? bufferFromNSDataDirect(prfSecond) : null,
-        ],
-        largeBlob: largeBlobBuffer,
-        largeBlobWritten,
-      });
-
-      finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      reject(createNativeAuthorizationError(error));
-      finished(false);
+      try {
+        fail(createNativeAuthorizationError(error));
+      } catch (callbackError) {
+        fail(callbackError);
+      }
     },
   });
   authController.setDelegate$(delegate);
@@ -375,8 +397,8 @@ function getCredentialInternal(
 
   // Cancelling auth controller on timeout
   timeoutHandlerId = setTimeout(() => {
-    if (isFinished) return;
-    authController.cancel();
+    // cancel() is a no-op when Apple has nothing in flight, so reject explicitly
+    fail(new Error("The operation timed out."));
   }, timeout);
 
   return promise;
