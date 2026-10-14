@@ -187,10 +187,10 @@ export async function getCredential(
   };
 
   // Add PRF extension results if available
-  if (result.prf && (result.prf[0] || result.prf[1])) {
+  if (result.prf && result.prf[0]) {
     data.extensions!.prf = {
       results: {
-        first: result.prf[0] ? bufferToBase64Url(result.prf[0]) : undefined,
+        first: bufferToBase64Url(result.prf[0]),
         second: result.prf[1] ? bufferToBase64Url(result.prf[1]) : undefined,
       },
     };

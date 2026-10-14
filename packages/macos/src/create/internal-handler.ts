@@ -422,8 +422,9 @@ function createCredentialInternal(
         attestationObject: attestationObjectBuffer,
         authenticatorData,
         attachment: authenticatorAttachment,
-        // Touch ID is internal only. macOS does not expose the transport used by security keys.
-        transports: isPlatform ? ["internal"] : [],
+        // Platform credentials can be iCloud Keychain passkeys, which are also usable over hybrid.
+        // macOS does not expose the transport used by security keys.
+        transports: isPlatform ? ["hybrid", "internal"] : [],
         isResidentKey: true,
         publicKeyAlgorithm: publicKey.algorithm(),
         publicKey: publicKeySPKI,

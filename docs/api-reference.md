@@ -41,7 +41,7 @@ interface CreateCredentialSuccessResult {
     authData: string; // Base64url-encoded raw authenticator data
     publicKey: string; // Base64url-encoded public key (COSE format)
     publicKeyAlgorithm: number; // COSE algorithm identifier (e.g., -7 for ES256)
-    transports: AuthenticatorTransport[]; // ["internal"] for platform authenticators, [] for security keys
+    transports: AuthenticatorTransport[]; // ["hybrid", "internal"] for platform authenticators, [] for security keys
     authenticatorAttachment: "platform" | "cross-platform";
     extensions: {
       credProps?: {
@@ -202,7 +202,7 @@ interface GetCredentialSuccessResult {
     extensions?: {
       prf?: {
         results?: {
-          first?: string; // Base64url-encoded PRF output
+          first: string; // Base64url-encoded PRF output
           second?: string; // Base64url-encoded PRF output (if provided)
         };
       };
