@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@electron-webauthn/types": "^1.3.0",
+    "@oslojs/cbor": "^1.0.0",
     "@oslojs/webauthn": "^1.0.0",
     "objc-js": "^1.6.0"
   },

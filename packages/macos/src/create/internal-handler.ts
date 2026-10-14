@@ -1,6 +1,7 @@
 import { generateClientDataInfo } from "../helpers/client-data.js";
 import { generateWebauthnClientData } from "../helpers/client-data.js";
 import { PromiseWithResolvers } from "../helpers/index.js";
+import { extractRawAuthenticatorData } from "../helpers/attestation.js";
 import { encodeEC2PublicKeyToSPKI } from "../helpers/public-key.js";
 import { createPresentationContextProviderFromNativeWindowHandle } from "../helpers/presentation.js";
 import { createPRFInput, type PRFInput } from "../helpers/prf.js";
@@ -374,8 +375,8 @@ function createCredentialInternal(
       const ec2Key = publicKey.ec2();
       const publicKeySPKI = encodeEC2PublicKeyToSPKI(ec2Key.x, ec2Key.y);
 
-      const authenticatorData = Buffer.from(
-        JSON.stringify(attestation.authenticatorData)
+      const authenticatorData = extractRawAuthenticatorData(
+        attestationObjectBuffer
       );
 
       let authenticatorAttachment: AuthenticatorAttachment = "cross-platform";
