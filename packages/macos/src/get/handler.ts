@@ -90,7 +90,7 @@ export async function getCredential(
 ): Promise<GetCredentialResult> {
   // Check all the arguments
   if (!publicKeyOptions) {
-    return null;
+    return { success: false, error: "TypeError" };
   }
 
   const rpId = publicKeyOptions.rpId;

@@ -82,7 +82,7 @@ export async function createCredential(
 ): Promise<CreateCredentialResult> {
   // Check all the arguments
   if (!publicKeyOptions) {
-    return null;
+    return { success: false, error: "TypeError" };
   }
 
   const rpInfo = publicKeyOptions.rp;
