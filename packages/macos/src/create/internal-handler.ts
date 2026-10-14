@@ -1,5 +1,6 @@
 import { generateClientDataInfo } from "../helpers/client-data.js";
 import { generateWebauthnClientData } from "../helpers/client-data.js";
+import { createNativeAuthorizationError } from "../helpers/errors.js";
 import { PromiseWithResolvers } from "../helpers/index.js";
 import { extractRawAuthenticatorData } from "../helpers/attestation.js";
 import { encodeEC2PublicKeyToSPKI } from "../helpers/public-key.js";
@@ -435,10 +436,7 @@ function createCredentialInternal(
       finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      const errorMessage = error.localizedDescription().UTF8String();
-      // console.error("Authorization failed:", errorMessage);
-
-      reject(new Error(errorMessage));
+      reject(createNativeAuthorizationError(error));
       finished(false);
     },
   });

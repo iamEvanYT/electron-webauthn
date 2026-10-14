@@ -1,3 +1,4 @@
+import { createNativeAuthorizationError } from "../helpers/errors.js";
 import { base64UrlToBuffer, PromiseWithResolvers } from "../helpers/index.js";
 import {
   removeClientDataHash,
@@ -356,10 +357,7 @@ function getCredentialInternal(
       finished(true);
     },
     authorizationController$didCompleteWithError$: (_, error) => {
-      const errorMessage = error.localizedDescription().UTF8String();
-      // console.error("Authorization failed:", errorMessage);
-
-      reject(new Error(errorMessage));
+      reject(createNativeAuthorizationError(error));
       finished(false);
     },
   });

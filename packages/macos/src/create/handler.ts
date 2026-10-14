@@ -1,4 +1,5 @@
 import type { UserVerificationPreference } from "../get/internal-handler.js";
+import { mapCreateAuthorizationError } from "../helpers/errors.js";
 import { bufferSourceToBuffer, bufferToBase64Url } from "../helpers/index.js";
 import type { PRFInput } from "../helpers/prf.js";
 import { isRpIdAllowedForOrigin } from "../helpers/rpid.js";
@@ -248,18 +249,7 @@ export async function createCredential(
   ).catch((error: Error) => {
     errorResult = error;
     // console.error("Error creating credential", error);
-    if (
-      error.message.includes(
-        "(com.apple.AuthenticationServices.AuthorizationError error 1006.)"
-      )
-    ) {
-      // MatchedExcludedCredential
-      return "InvalidStateError";
-    }
-    if (error.message.startsWith("The operation couldn’t be completed.")) {
-      return "NotAllowedError";
-    }
-    return null;
+    return mapCreateAuthorizationError(error);
   });
 
   if (typeof result === "string") {

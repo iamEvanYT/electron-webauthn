@@ -168,9 +168,6 @@ export async function getCredential(
   ).catch((error: Error) => {
     errorResult = error;
     // console.error("Error getting credential", error);
-    if (error.message.startsWith("The operation couldn’t be completed.")) {
-      return "NotAllowedError";
-    }
     return "NotAllowedError" as const;
   });
 
